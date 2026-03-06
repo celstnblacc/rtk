@@ -4,7 +4,7 @@
 /// via TOML files. Lookup priority (first match wins):
 ///   1. `.rtk/filters.toml`              — project-local, committable with the repo
 ///   2. `~/.config/rtk/filters.toml`     — user-global, applies to all projects
-///   3. Built-in TOML                     — `src/builtin_filters.toml`, embedded at compile time
+///   3. Built-in TOML                     — `src/filters/*.toml`, concatenated by build.rs and embedded at compile time
 ///   4. Passthrough                       — no match, handled by caller
 ///
 /// `rtk init` generates a commented template for both levels (project or global).
@@ -26,6 +26,9 @@ use lazy_static::lazy_static;
 use regex::{Regex, RegexSet};
 use serde::Deserialize;
 use std::collections::BTreeMap;
+
+// Built-in filters: concatenated from src/filters/*.toml by build.rs at compile time.
+const BUILTIN_TOML: &str = include_str!(concat!(env!("OUT_DIR"), "/builtin_filters.toml"));
 
 // ---------------------------------------------------------------------------
 // Deserialization types (TOML schema)
@@ -192,7 +195,7 @@ impl TomlFilterRegistry {
         }
 
         // Priority 3: built-in (embedded at compile time)
-        let builtin = include_str!("builtin_filters.toml");
+        let builtin = BUILTIN_TOML;
         match Self::parse_and_compile(builtin, "builtin") {
             Ok(f) => filters.extend(f),
             Err(e) => eprintln!("[rtk] warning: builtin filters: {}", e),
@@ -496,7 +499,7 @@ pub fn run_filter_tests(filter_name_opt: Option<&str>) -> VerifyResults {
     let mut tested_filter_names: std::collections::HashSet<String> =
         std::collections::HashSet::new();
 
-    let builtin = include_str!("builtin_filters.toml");
+    let builtin = BUILTIN_TOML;
     collect_test_outcomes(
         builtin,
         filter_name_opt,
@@ -899,12 +902,12 @@ match_command = "^cmd"
 
     #[test]
     fn test_builtin_filters_compile() {
-        // Compile-time safety: panics if builtin_filters.toml is broken
-        let builtin = include_str!("builtin_filters.toml");
+        // Compile-time safety: panics if any src/filters/*.toml is broken
+        let builtin = BUILTIN_TOML;
         let result = TomlFilterRegistry::parse_and_compile(builtin, "builtin");
         assert!(
             result.is_ok(),
-            "builtin_filters.toml failed to compile: {:?}",
+            "builtin filters failed to compile: {:?}",
             result
         );
         assert!(!result.unwrap().is_empty());
@@ -949,7 +952,7 @@ match_command = "^make\\b"
 max_lines = 999
 "#,
         );
-        let builtin = make_filters(include_str!("builtin_filters.toml"));
+        let builtin = make_filters(BUILTIN_TOML);
 
         // Simulate the registry: project first
         let mut all = project;
@@ -965,7 +968,7 @@ max_lines = 999
 
     #[test]
     fn test_terraform_savings_above_60pct() {
-        let filters = make_filters(include_str!("builtin_filters.toml"));
+        let filters = make_filters(BUILTIN_TOML);
         let filter = find_filter_in("terraform plan", &filters).expect("terraform-plan built-in");
 
         // Inline fixture: realistic terraform plan with many Refreshing state lines (noise).
@@ -1029,7 +1032,7 @@ max_lines = 999
 
     #[test]
     fn test_make_savings_above_60pct() {
-        let filters = make_filters(include_str!("builtin_filters.toml"));
+        let filters = make_filters(BUILTIN_TOML);
         let filter = find_filter_in("make all", &filters).expect("make built-in");
 
         let input = r#"make[1]: Entering directory '/home/user/project'
