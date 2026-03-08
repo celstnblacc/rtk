@@ -10,7 +10,6 @@ strip_lines_matching = [
 ]
 match_output = [
   { pattern = "Audited \\d+ package", message = "ok (up to date)" },
-  { pattern = "Resolved \\d+ package", message = "ok (synced)" },
 ]
 max_lines = 20
 
