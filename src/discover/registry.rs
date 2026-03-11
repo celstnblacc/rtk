@@ -48,6 +48,10 @@ lazy_static! {
         .collect();
     static ref ENV_PREFIX: Regex =
         Regex::new(r"^(?:sudo\s+|env\s+|[A-Z_][A-Z0-9_]*=[^\s]*\s+)+").unwrap();
+    // Git global options that appear before the subcommand: -C <path>, -c <key=val>,
+    // --git-dir <dir>, --work-tree <dir>, and flag-only options (#163)
+    static ref GIT_GLOBAL_OPT: Regex =
+        Regex::new(r"^(?:(?:-C\s+\S+|-c\s+\S+|--git-dir(?:=\S+|\s+\S+)|--work-tree(?:=\S+|\s+\S+)|--no-pager|--no-optional-locks|--bare|--literal-pathspecs)\s+)+").unwrap();
 }
 
 /// Classify a single (already-split) command.
@@ -78,6 +82,8 @@ pub fn classify_command(cmd: &str) -> Classification {
 
     // Normalize absolute binary paths: /usr/bin/grep → grep (#485)
     let cmd_normalized = strip_absolute_path(cmd_clean);
+    // Strip git global options: git -C /tmp status → git status (#163)
+    let cmd_normalized = strip_git_global_opts(&cmd_normalized);
     let cmd_clean = cmd_normalized.as_str();
 
     // Exclude cat/head/tail with redirect operators — these are writes, not reads (#315)
@@ -264,6 +270,19 @@ pub fn split_command_chain(cmd: &str) -> Vec<&str> {
     }
 
     results
+}
+
+/// Strip git global options before the subcommand (#163).
+/// `git -C /tmp status` → `git status`, preserving the rest.
+/// Returns the original string unchanged if not a git command.
+fn strip_git_global_opts(cmd: &str) -> String {
+    // Only applies to commands starting with "git "
+    if !cmd.starts_with("git ") {
+        return cmd.to_string();
+    }
+    let after_git = &cmd[4..]; // skip "git "
+    let stripped = GIT_GLOBAL_OPT.replace(after_git, "");
+    format!("git {}", stripped.trim())
 }
 
 /// Normalize absolute binary paths: `/usr/bin/grep -rn foo` → `grep -rn foo` (#485)
@@ -2030,5 +2049,70 @@ mod tests {
         assert_eq!(strip_absolute_path("/bin/ls -la"), "ls -la");
         assert_eq!(strip_absolute_path("grep -rn foo"), "grep -rn foo");
         assert_eq!(strip_absolute_path("/usr/local/bin/git"), "git");
+    }
+
+    // --- #163: git global options ---
+
+    #[test]
+    fn test_classify_git_with_dash_c_path() {
+        assert_eq!(
+            classify_command("git -C /tmp status"),
+            Classification::Supported {
+                rtk_equivalent: "rtk git",
+                category: "Git",
+                estimated_savings_pct: 70.0,
+                status: RtkStatus::Existing,
+            }
+        );
+    }
+
+    #[test]
+    fn test_classify_git_no_pager_log() {
+        assert_eq!(
+            classify_command("git --no-pager log -5"),
+            Classification::Supported {
+                rtk_equivalent: "rtk git",
+                category: "Git",
+                estimated_savings_pct: 70.0,
+                status: RtkStatus::Existing,
+            }
+        );
+    }
+
+    #[test]
+    fn test_classify_git_git_dir() {
+        assert_eq!(
+            classify_command("git --git-dir /tmp/.git status"),
+            Classification::Supported {
+                rtk_equivalent: "rtk git",
+                category: "Git",
+                estimated_savings_pct: 70.0,
+                status: RtkStatus::Existing,
+            }
+        );
+    }
+
+    #[test]
+    fn test_rewrite_git_dash_c() {
+        assert_eq!(
+            rewrite_command("git -C /tmp status", &[]),
+            Some("rtk git -C /tmp status".to_string())
+        );
+    }
+
+    #[test]
+    fn test_rewrite_git_no_pager() {
+        assert_eq!(
+            rewrite_command("git --no-pager log -5", &[]),
+            Some("rtk git --no-pager log -5".to_string())
+        );
+    }
+
+    #[test]
+    fn test_strip_git_global_opts_helper() {
+        assert_eq!(strip_git_global_opts("git -C /tmp status"), "git status");
+        assert_eq!(strip_git_global_opts("git --no-pager log"), "git log");
+        assert_eq!(strip_git_global_opts("git status"), "git status");
+        assert_eq!(strip_git_global_opts("cargo test"), "cargo test");
     }
 }
