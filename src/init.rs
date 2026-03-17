@@ -1287,14 +1287,14 @@ pub fn show_config() -> Result<()> {
             println!("[ok] Hook: {} (exists)", hook_path.display());
         }
     } else {
-        println!("⚪ Hook: not found");
+        println!("[--] Hook: not found");
     }
 
     // Check RTK.md
     if rtk_md_path.exists() {
         println!("[ok] RTK.md: {} (slim mode)", rtk_md_path.display());
     } else {
-        println!("⚪ RTK.md: not found");
+        println!("[--] RTK.md: not found");
     }
 
     // Check hook integrity
@@ -1327,10 +1327,10 @@ pub fn show_config() -> Result<()> {
                 "[warn] Global (~/.claude/CLAUDE.md): old RTK block (run: rtk init -g to migrate)"
             );
         } else {
-            println!("⚪ Global (~/.claude/CLAUDE.md): exists but rtk not configured");
+            println!("[--] Global (~/.claude/CLAUDE.md): exists but rtk not configured");
         }
     } else {
-        println!("⚪ Global (~/.claude/CLAUDE.md): not found");
+        println!("[--] Global (~/.claude/CLAUDE.md): not found");
     }
 
     // Check local CLAUDE.md
@@ -1339,10 +1339,10 @@ pub fn show_config() -> Result<()> {
         if content.contains("rtk") {
             println!("[ok] Local (./CLAUDE.md): rtk enabled");
         } else {
-            println!("⚪ Local (./CLAUDE.md): exists but rtk not configured");
+            println!("[--] Local (./CLAUDE.md): exists but rtk not configured");
         }
     } else {
-        println!("⚪ Local (./CLAUDE.md): not found");
+        println!("[--] Local (./CLAUDE.md): not found");
     }
 
     // Check settings.json
@@ -1362,10 +1362,10 @@ pub fn show_config() -> Result<()> {
                 println!("[warn] settings.json: exists but invalid JSON");
             }
         } else {
-            println!("⚪ settings.json: empty");
+            println!("[--] settings.json: empty");
         }
     } else {
-        println!("⚪ settings.json: not found");
+        println!("[--] settings.json: not found");
     }
 
     // Check OpenCode plugin
@@ -1374,10 +1374,10 @@ pub fn show_config() -> Result<()> {
         if plugin.exists() {
             println!("[ok] OpenCode: plugin installed ({})", plugin.display());
         } else {
-            println!("⚪ OpenCode: plugin not found");
+            println!("[--] OpenCode: plugin not found");
         }
     } else {
-        println!("⚪ OpenCode: config dir not found");
+        println!("[--] OpenCode: config dir not found");
     }
 
     println!("\nUsage:");

@@ -255,9 +255,9 @@ fn list_prs(args: &[String], _verbose: u8, ultra_compact: bool) -> Result<()> {
             } else {
                 match state {
                     "OPEN" => "[open]",
-                    "MERGED" => "🟣",
+                    "MERGED" => "[merged]",
                     "CLOSED" => "[closed]",
-                    _ => "⚪",
+                    _ => "[unknown]",
                 }
             };
 
@@ -353,9 +353,9 @@ fn view_pr(args: &[String], _verbose: u8, ultra_compact: bool) -> Result<()> {
     } else {
         match state {
             "OPEN" => "[open]",
-            "MERGED" => "🟣",
+            "MERGED" => "[merged]",
             "CLOSED" => "[closed]",
-            _ => "⚪",
+            _ => "[unknown]",
         }
     };
 
@@ -844,7 +844,7 @@ fn list_runs(args: &[String], _verbose: u8, ultra_compact: bool) -> Result<()> {
                         if status == "in_progress" {
                             "[time]"
                         } else {
-                            "⚪"
+                            "[pending]"
                         }
                     }
                 }
@@ -1009,7 +1009,7 @@ fn run_repo(args: &[String], _verbose: u8, _ultra_compact: bool) -> Result<()> {
         print!("{}", line);
     }
 
-    let line = format!("  ⭐ {} stars | 🔱 {} forks\n", stars, forks);
+    let line = format!("  {} stars | {} forks\n", stars, forks);
     filtered.push_str(&line);
     print!("{}", line);
 
