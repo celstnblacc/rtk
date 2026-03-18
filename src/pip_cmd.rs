@@ -206,7 +206,7 @@ fn filter_pip_outdated(output: &str) -> String {
     };
 
     if packages.is_empty() {
-        return "✓ pip outdated: All packages up to date".to_string();
+        return "pip outdated: All packages up to date".to_string();
     }
 
     let mut result = String::new();
@@ -263,7 +263,6 @@ mod tests {
     fn test_filter_pip_outdated_none() {
         let output = "[]";
         let result = filter_pip_outdated(output);
-        assert!(result.contains("✓"));
         assert!(result.contains("All packages up to date"));
     }
 

@@ -296,7 +296,7 @@ fn kubectl_pods(args: &[String], _verbose: u8) -> Result<()> {
 
     let mut parts = Vec::new();
     if running > 0 {
-        parts.push(format!("{} ✓", running));
+        parts.push(format!("{}", running));
     }
     if pending > 0 {
         parts.push(format!("{} pending", pending));

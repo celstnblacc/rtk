@@ -129,10 +129,10 @@ fn filter_next_build(output: &str) -> String {
     result.push_str("═══════════════════════════════════════\n");
 
     if already_built && routes_total == 0 {
-        result.push_str("✓ Already built (using cache)\n\n");
+        result.push_str("Already built (using cache)\n\n");
     } else if routes_total > 0 {
         result.push_str(&format!(
-            "✓ {} routes ({} static, {} dynamic)\n\n",
+            "{} routes ({} static, {} dynamic)\n\n",
             routes_total, routes_static, routes_dynamic
         ));
     }

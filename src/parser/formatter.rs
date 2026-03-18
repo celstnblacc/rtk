@@ -195,7 +195,7 @@ impl TokenFormatter for LintResult {
 impl TokenFormatter for DependencyState {
     fn format_compact(&self) -> String {
         if self.outdated_count == 0 {
-            return "All packages up-to-date ✓".to_string();
+            return "All packages up-to-date".to_string();
         }
 
         let mut lines = vec![format!(

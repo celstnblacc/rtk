@@ -421,7 +421,7 @@ fn view_pr(args: &[String], _verbose: u8, ultra_compact: bool) -> Result<()> {
                 filtered.push_str(&line);
                 print!("{}", line);
             } else {
-                let line = format!("  ✓{}/{}\n", passed, total);
+                let line = format!("  {}/{}\n", passed, total);
                 filtered.push_str(&line);
                 print!("{}", line);
             }

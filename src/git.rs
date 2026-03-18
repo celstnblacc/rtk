@@ -704,7 +704,7 @@ fn filter_status_with_args(output: &str) -> String {
     }
 
     if result.is_empty() {
-        "ok ✓".to_string()
+        "ok".to_string()
     } else {
         result.join("\n")
     }
@@ -830,9 +830,9 @@ fn run_add(args: &[String], verbose: u8, global_args: &[String]) -> Result<()> {
             // Parse "1 file changed, 5 insertions(+)" format
             let short = stat.lines().last().unwrap_or("").trim();
             if short.is_empty() {
-                "ok ✓".to_string()
+                "ok".to_string()
             } else {
-                format!("ok ✓ {}", short)
+                format!("ok {}", short)
             }
         };
 
@@ -893,15 +893,15 @@ fn run_commit(args: &[String], verbose: u8, global_args: &[String]) -> Result<()
             if let Some(hash_start) = line.find(' ') {
                 let hash = line[1..hash_start].split(' ').next_back().unwrap_or("");
                 if !hash.is_empty() && hash.len() >= 7 {
-                    format!("ok ✓ {}", &hash[..7.min(hash.len())])
+                    format!("ok {}", &hash[..7.min(hash.len())])
                 } else {
-                    "ok ✓".to_string()
+                    "ok".to_string()
                 }
             } else {
-                "ok ✓".to_string()
+                "ok".to_string()
             }
         } else {
-            "ok ✓".to_string()
+            "ok".to_string()
         };
 
         println!("{}", compact);
@@ -959,7 +959,7 @@ fn run_push(args: &[String], verbose: u8, global_args: &[String]) -> Result<()> 
                 if line.contains("->") {
                     let parts: Vec<&str> = line.split_whitespace().collect();
                     if parts.len() >= 3 {
-                        result = format!("ok ✓ {}", parts[parts.len() - 1]);
+                        result = format!("ok {}", parts[parts.len() - 1]);
                         break;
                     }
                 }
@@ -967,7 +967,7 @@ fn run_push(args: &[String], verbose: u8, global_args: &[String]) -> Result<()> 
             if !result.is_empty() {
                 result
             } else {
-                "ok ✓".to_string()
+                "ok".to_string()
             }
         };
 
@@ -1051,9 +1051,9 @@ fn run_pull(args: &[String], verbose: u8, global_args: &[String]) -> Result<()> 
                 }
 
                 if files > 0 {
-                    format!("ok ✓ {} files +{} -{}", files, insertions, deletions)
+                    format!("ok {} files +{} -{}", files, insertions, deletions)
                 } else {
-                    "ok ✓".to_string()
+                    "ok".to_string()
                 }
             };
 
@@ -1171,7 +1171,7 @@ fn run_branch(args: &[String], verbose: u8, global_args: &[String]) -> Result<()
         let combined = format!("{}{}", stdout, stderr);
 
         let msg = if output.status.success() {
-            "ok ✓"
+            "ok"
         } else {
             &combined
         };
@@ -1184,7 +1184,7 @@ fn run_branch(args: &[String], verbose: u8, global_args: &[String]) -> Result<()
         );
 
         if output.status.success() {
-            println!("ok ✓");
+            println!("ok");
         } else {
             eprintln!("FAILED: git branch {}", args.join(" "));
             if !stderr.trim().is_empty() {
@@ -1548,7 +1548,7 @@ fn run_worktree(args: &[String], verbose: u8, global_args: &[String]) -> Result<
         let combined = format!("{}{}", stdout, stderr);
 
         let msg = if output.status.success() {
-            "ok ✓"
+            "ok"
         } else {
             &combined
         };
@@ -1561,7 +1561,7 @@ fn run_worktree(args: &[String], verbose: u8, global_args: &[String]) -> Result<
         );
 
         if output.status.success() {
-            println!("ok ✓");
+            println!("ok");
         } else {
             eprintln!("FAILED: git worktree {}", args.join(" "));
             if !stderr.trim().is_empty() {

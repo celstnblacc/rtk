@@ -167,7 +167,7 @@ fn build_pytest_summary(summary: &str, _test_files: &[String], failures: &[Strin
     let (passed, failed, skipped) = parse_summary_line(summary);
 
     if failed == 0 && passed > 0 {
-        return format!("✓ Pytest: {} passed", passed);
+        return format!("Pytest: {} passed", passed);
     }
 
     if passed == 0 && failed == 0 {
@@ -288,7 +288,7 @@ tests/test_foo.py .....                                            [100%]
 === 5 passed in 0.50s ==="#;
 
         let result = filter_pytest_output(output);
-        assert!(result.contains("✓ Pytest"));
+        assert!(result.contains("Pytest"));
         assert!(result.contains("5 passed"));
     }
 
