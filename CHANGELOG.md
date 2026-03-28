@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Bug Fixes
 
+* **gain:** use weighted savings rate in per-command stats — `AVG(savings_pct)` replaced by `SUM(saved_tokens)/SUM(input_tokens)`, fixing commands like `grep` showing 14.8% instead of 98.6%; column renamed `Avg%` → `Rate` ([#891](https://github.com/rtk-ai/rtk/pull/891)) ([b3ab873](https://github.com/rtk-ai/rtk/commit/b3ab873))
 * **diff:** correct truncation overflow count in condense_unified_diff ([#833](https://github.com/rtk-ai/rtk/pull/833)) ([5399f83](https://github.com/rtk-ai/rtk/commit/5399f83))
 * **git:** replace vague truncation markers with exact counts in log and grep output ([#833](https://github.com/rtk-ai/rtk/pull/833)) ([185fb97](https://github.com/rtk-ai/rtk/commit/185fb97))
 
