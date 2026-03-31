@@ -5,6 +5,19 @@ All notable changes to rtk (Rust Token Killer) will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.34.2-security.1] (2026-03-31) — celstnblacc/rtk fork
+
+### Security
+
+* **permissions:** enforce Claude Code allow list — commands not on allowlist now return Ask instead of Allow (#886)
+* **subprocess:** global stdin null on all 130+ subprocess calls — prevents hook pipe inheritance and kernel panic (#897)
+* **telemetry:** stripped entirely — no more phoning home (deleted telemetry.rs, removed ureq/hostname/getrandom deps)
+
+### Fixed
+
+* **codex:** anchor RTK.md and AGENTS.md to git worktree root instead of bare relative paths (#892)
+* **benchmark:** replace eval with bash -c to resolve SHELL-001 SAST findings
+
 ## [0.34.2](https://github.com/rtk-ai/rtk/compare/v0.34.1...v0.34.2) (2026-03-30)
 
 
