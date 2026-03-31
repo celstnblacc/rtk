@@ -119,6 +119,7 @@ main() {
 
     echo ""
     info "Installation complete! Run '$BINARY_NAME --help' to get started."
+    info "Recommended next step: '$BINARY_NAME init -g' to configure Claude Code and Codex."
 }
 
 main

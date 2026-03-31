@@ -17,13 +17,13 @@
 <p align="center">
   <a href="https://www.rtk-ai.app">ウェブサイト</a> &bull;
   <a href="#インストール">インストール</a> &bull;
-  <a href="docs/TROUBLESHOOTING.md">トラブルシューティング</a> &bull;
-  <a href="ARCHITECTURE.md">アーキテクチャ</a> &bull;
+  <a href="TROUBLESHOOTING.md">トラブルシューティング</a> &bull;
+  <a href="../ARCHITECTURE.md">アーキテクチャ</a> &bull;
   <a href="https://discord.gg/RySmvNF5kF">Discord</a>
 </p>
 
 <p align="center">
-  <a href="README.md">English</a> &bull;
+  <a href="../README.md">English</a> &bull;
   <a href="README_fr.md">Francais</a> &bull;
   <a href="README_zh.md">中文</a> &bull;
   <a href="README_ja.md">日本語</a> &bull;
@@ -144,9 +144,9 @@ rtk discover                    # 見逃した節約機会を発見
 
 ## ドキュメント
 
-- **[TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)** - よくある問題の解決
+- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - よくある問題の解決
 - **[INSTALL.md](INSTALL.md)** - 詳細インストールガイド
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** - 技術アーキテクチャ
+- **[ARCHITECTURE.md](../ARCHITECTURE.md)** - 技術アーキテクチャ
 
 ## コントリビュート
 
@@ -156,4 +156,4 @@ rtk discover                    # 見逃した節約機会を発見
 
 ## ライセンス
 
-MIT ライセンス - 詳細は [LICENSE](LICENSE) を参照。
+MIT ライセンス - 詳細は [LICENSE](../LICENSE) を参照。

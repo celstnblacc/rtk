@@ -621,7 +621,12 @@ pub fn uninstall(global: bool, gemini: bool, codex: bool, cursor: bool, verbose:
         removed.push(format!("OpenCode plugin: {}", path.display()));
     }
 
-    // 6. Remove Cursor hooks
+    // 6. Remove Codex global instructions
+    if let Ok(codex_dir) = resolve_codex_dir() {
+        removed.extend(uninstall_codex_at(&codex_dir, verbose)?);
+    }
+
+    // 7. Remove Cursor hooks
     let cursor_removed = remove_cursor_hooks(verbose)?;
     removed.extend(cursor_removed);
 
@@ -910,7 +915,10 @@ fn run_default_mode(
     // 3. Patch CLAUDE.md (add @RTK.md, migrate if needed)
     let migrated = patch_claude_md(&claude_md_path, verbose)?;
 
-    // 4. Print success message
+    // 4. Also configure Codex so one global init covers both CLIs.
+    let codex_added_ref = install_codex_instructions(true, verbose)?;
+
+    // 5. Print success message
     let hook_status = if hook_changed {
         "installed/updated"
     } else {
@@ -923,13 +931,18 @@ fn run_default_mode(
         println!("  OpenCode:  {}", path.display());
     }
     println!("  CLAUDE.md: @RTK.md reference added");
+    if codex_added_ref {
+        println!("  Codex:     ~/.codex/AGENTS.md + ~/.codex/RTK.md configured");
+    } else {
+        println!("  Codex:     ~/.codex/AGENTS.md already references @RTK.md");
+    }
 
     if migrated {
         println!("\n  [ok] Migrated: removed 137-line RTK block from CLAUDE.md");
         println!("              replaced with @RTK.md (10 lines)");
     }
 
-    // 5. Patch settings.json
+    // 6. Patch settings.json
     let patch_result = patch_settings_json(&hook_path, patch_mode, verbose, install_opencode)?;
 
     // Report result
@@ -950,7 +963,7 @@ fn run_default_mode(
         }
     }
 
-    // 6. Generate user-global filters template (~/.config/rtk/filters.toml)
+    // 7. Generate user-global filters template (~/.config/rtk/filters.toml)
     generate_global_filters_template(verbose)?;
 
     println!(); // Final newline
@@ -1237,29 +1250,15 @@ fn run_windsurf_mode(verbose: u8) -> Result<()> {
 }
 
 fn run_codex_mode(global: bool, verbose: u8) -> Result<()> {
+    let added_ref = install_codex_instructions(global, verbose)?;
+
     let (agents_md_path, rtk_md_path) = if global {
         let codex_dir = resolve_codex_dir()?;
         (codex_dir.join("AGENTS.md"), codex_dir.join("RTK.md"))
     } else {
-        // fix #892: anchor to git worktree root so the files are found when
-        // Codex is run from any worktree, not just the directory where rtk init ran.
         let root = crate::core::utils::git_worktree_root();
         (root.join("AGENTS.md"), root.join("RTK.md"))
     };
-
-    if global {
-        if let Some(parent) = agents_md_path.parent() {
-            fs::create_dir_all(parent).with_context(|| {
-                format!(
-                    "Failed to create Codex config directory: {}",
-                    parent.display()
-                )
-            })?;
-        }
-    }
-
-    write_if_changed(&rtk_md_path, RTK_SLIM_CODEX, "RTK.md", verbose)?;
-    let added_ref = patch_agents_md(&agents_md_path, verbose)?;
 
     println!("\nRTK configured for Codex CLI.\n");
     println!("  RTK.md:    {}", rtk_md_path.display());
@@ -1281,6 +1280,30 @@ fn run_codex_mode(global: bool, verbose: u8) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn install_codex_instructions(global: bool, verbose: u8) -> Result<bool> {
+    let (agents_md_path, rtk_md_path) = if global {
+        let codex_dir = resolve_codex_dir()?;
+        (codex_dir.join("AGENTS.md"), codex_dir.join("RTK.md"))
+    } else {
+        // fix #892: anchor to git worktree root so the files are found when
+        // Codex is run from any worktree, not just the directory where rtk init ran.
+        let root = crate::core::utils::git_worktree_root();
+        (root.join("AGENTS.md"), root.join("RTK.md"))
+    };
+
+    if let Some(parent) = agents_md_path.parent() {
+        fs::create_dir_all(parent).with_context(|| {
+            format!(
+                "Failed to create Codex config directory: {}",
+                parent.display()
+            )
+        })?;
+    }
+
+    write_if_changed(&rtk_md_path, RTK_SLIM_CODEX, "RTK.md", verbose)?;
+    patch_agents_md(&agents_md_path, verbose)
 }
 
 // --- upsert_rtk_block: idempotent RTK block management ---
@@ -2017,9 +2040,34 @@ fn show_claude_config() -> Result<()> {
         println!("[--] Cursor: home dir not found");
     }
 
+    // Check Codex global instructions
+    if let Ok(codex_dir) = resolve_codex_dir() {
+        let codex_rtk_md = codex_dir.join("RTK.md");
+        let codex_agents_md = codex_dir.join("AGENTS.md");
+
+        if codex_rtk_md.exists() {
+            println!("[ok] Codex RTK.md: {}", codex_rtk_md.display());
+        } else {
+            println!("[--] Codex RTK.md: not found");
+        }
+
+        if codex_agents_md.exists() {
+            let content = fs::read_to_string(&codex_agents_md)?;
+            if content.contains("@RTK.md") {
+                println!("[ok] Codex AGENTS.md: @RTK.md reference");
+            } else {
+                println!("[--] Codex AGENTS.md: exists but rtk not configured");
+            }
+        } else {
+            println!("[--] Codex AGENTS.md: not found");
+        }
+    } else {
+        println!("[--] Codex: home dir not found");
+    }
+
     println!("\nUsage:");
     println!("  rtk init              # Full injection into local CLAUDE.md");
-    println!("  rtk init -g           # Hook + RTK.md + @RTK.md + settings.json (recommended)");
+    println!("  rtk init -g           # Claude hook + Codex instructions (recommended)");
     println!("  rtk init -g --auto-patch    # Same as above but no prompt");
     println!("  rtk init -g --no-patch      # Skip settings.json (manual setup)");
     println!("  rtk init -g --uninstall     # Remove all RTK artifacts");
@@ -2678,6 +2726,23 @@ More notes
         let content = fs::read_to_string(&agents_md).unwrap();
         assert!(!content.contains("old"));
         assert_eq!(content.matches("@RTK.md").count(), 1);
+    }
+
+    #[test]
+    fn test_install_codex_instructions_creates_both_files() {
+        let temp = TempDir::new().unwrap();
+        let cwd = std::env::current_dir().unwrap();
+        std::env::set_current_dir(temp.path()).unwrap();
+
+        let added = install_codex_instructions(false, 0).unwrap();
+
+        let agents_md = temp.path().join("AGENTS.md");
+        let rtk_md = temp.path().join("RTK.md");
+        assert!(added);
+        assert_eq!(fs::read_to_string(&agents_md).unwrap(), "@RTK.md\n");
+        assert_eq!(fs::read_to_string(&rtk_md).unwrap(), RTK_SLIM_CODEX);
+
+        std::env::set_current_dir(cwd).unwrap();
     }
 
     #[test]
