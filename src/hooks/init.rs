@@ -1250,7 +1250,10 @@ fn run_codex_mode(global: bool, verbose: u8) -> Result<()> {
         let codex_dir = resolve_codex_dir()?;
         (codex_dir.join("AGENTS.md"), codex_dir.join("RTK.md"))
     } else {
-        (PathBuf::from("AGENTS.md"), PathBuf::from("RTK.md"))
+        // fix #892: anchor to git worktree root so the files are found when
+        // Codex is run from any worktree, not just the directory where rtk init ran.
+        let root = crate::core::utils::git_worktree_root();
+        (root.join("AGENTS.md"), root.join("RTK.md"))
     };
 
     if global {
