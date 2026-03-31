@@ -129,11 +129,6 @@ pub fn limits() -> LimitsConfig {
     Config::load().map(|c| c.limits).unwrap_or_default()
 }
 
-/// Check if telemetry is enabled in config. Returns None if config can't be loaded.
-pub fn telemetry_enabled() -> Option<bool> {
-    Config::load().ok().map(|c| c.telemetry.enabled)
-}
-
 impl Config {
     pub fn load() -> Result<Self> {
         let path = get_config_path()?;

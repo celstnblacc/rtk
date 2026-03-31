@@ -24,11 +24,11 @@
 
 <p align="center">
   <a href="README.md">English</a> &bull;
-  <a href="README_fr.md">Francais</a> &bull;
-  <a href="README_zh.md">中文</a> &bull;
-  <a href="README_ja.md">日本語</a> &bull;
-  <a href="README_ko.md">한국어</a> &bull;
-  <a href="README_es.md">Espanol</a>
+  <a href="docs/README_fr.md">Francais</a> &bull;
+  <a href="docs/README_zh.md">中文</a> &bull;
+  <a href="docs/README_ja.md">日本語</a> &bull;
+  <a href="docs/README_ko.md">한국어</a> &bull;
+  <a href="docs/README_es.md">Espanol</a>
 </p>
 
 ---
@@ -100,9 +100,9 @@ rtk gain        # Should show token savings stats
 
 ```bash
 # 1. Install for your AI tool
-rtk init -g                     # Claude Code / Copilot (default)
+rtk init -g                     # Claude Code + Codex (default)
 rtk init -g --gemini            # Gemini CLI
-rtk init -g --codex             # Codex (OpenAI)
+rtk init -g --codex             # Codex only / repair Codex setup
 rtk init -g --agent cursor      # Cursor
 rtk init --agent windsurf       # Windsurf
 rtk init --agent cline          # Cline / Roo Code
@@ -353,10 +353,11 @@ Creates `~/.gemini/hooks/rtk-hook-gemini.sh` + patches `~/.gemini/settings.json`
 ### Codex (OpenAI)
 
 ```bash
-rtk init -g --codex
+rtk init -g         # default: Claude hook + Codex instructions
+rtk init -g --codex # Codex only / repair Codex setup
 ```
 
-Creates `~/.codex/RTK.md` + `~/.codex/AGENTS.md` with `@RTK.md` reference. Codex reads these as global instructions.
+`rtk init -g` now also creates `~/.codex/RTK.md` + `~/.codex/AGENTS.md` with `@RTK.md` reference, so a normal global install configures both Claude and Codex in one step. Codex reads these as global instructions.
 
 ### Windsurf
 
@@ -465,7 +466,7 @@ brew uninstall rtk           # If installed via Homebrew
 ## Documentation
 
 - **[TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)** - Fix common issues
-- **[INSTALL.md](INSTALL.md)** - Detailed installation guide
+- **[INSTALL.md](docs/INSTALL.md)** - Detailed installation guide
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** - Technical architecture
 - **[SECURITY.md](SECURITY.md)** - Security policy and PR review process
 - **[AUDIT_GUIDE.md](docs/AUDIT_GUIDE.md)** - Token savings analytics guide

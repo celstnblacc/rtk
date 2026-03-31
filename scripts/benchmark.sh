@@ -44,8 +44,8 @@ bench() {
   local unix_cmd="$2"
   local rtk_cmd="$3"
 
-  unix_out=$(eval "$unix_cmd" 2>/dev/null || true)
-  rtk_out=$(eval "$rtk_cmd" 2>/dev/null || true)
+  unix_out=$(bash -c "$unix_cmd" 2>/dev/null || true)
+  rtk_out=$(bash -c "$rtk_cmd" 2>/dev/null || true)
 
   unix_tokens=$(count_tokens "$unix_out")
   rtk_tokens=$(count_tokens "$rtk_out")
@@ -537,7 +537,7 @@ bench_rewrite() {
   local cmd="$2"
   local expected="$3"
 
-  result=$(eval "$cmd" 2>&1 || true)
+  result=$(bash -c "$cmd" 2>&1 || true)
 
   TOTAL_TESTS=$((TOTAL_TESTS + 1))
 

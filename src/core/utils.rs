@@ -337,7 +337,7 @@ pub fn resolve_binary(name: &str) -> Result<PathBuf> {
 /// # Returns
 /// A `Command` configured with the resolved binary path.
 pub fn resolved_command(name: &str) -> Command {
-    match resolve_binary(name) {
+    let mut cmd = match resolve_binary(name) {
         Ok(path) => Command::new(path),
         Err(e) => {
             // On Windows, resolution failure likely means a .CMD/.BAT wrapper
@@ -358,7 +358,12 @@ pub fn resolved_command(name: &str) -> Command {
             }
             Command::new(name)
         }
-    }
+    };
+    // fix #897 (global): prevent all subprocesses from inheriting the hook pipe's
+    // stdin. Without this, children block on EOF and leak memory. Commands that
+    // need stdin can override with .stdin(Stdio::piped()) after this call.
+    cmd.stdin(std::process::Stdio::null());
+    cmd
 }
 
 /// Check if a tool exists on PATH (PATHEXT-aware on Windows).
@@ -366,6 +371,25 @@ pub fn resolved_command(name: &str) -> Command {
 /// Replaces manual `Command::new("which").arg(tool)` checks that fail on Windows.
 pub fn tool_exists(name: &str) -> bool {
     which::which(name).is_ok()
+}
+
+/// Return the git worktree root for the current directory, or fall back to CWD.
+///
+/// Uses `git rev-parse --show-toplevel` which returns the worktree root (not the
+/// main repo root), making this safe for use inside git worktrees.
+///
+/// Used by `rtk init --codex` to anchor RTK.md and AGENTS.md to the repo root
+/// rather than the process CWD — fixes #892.
+pub fn git_worktree_root() -> std::path::PathBuf {
+    std::process::Command::new("git")
+        .args(["rev-parse", "--show-toplevel"])
+        .stdin(std::process::Stdio::null())
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| std::path::PathBuf::from(s.trim()))
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default())
 }
 
 #[cfg(test)]

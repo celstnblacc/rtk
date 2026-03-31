@@ -111,6 +111,16 @@ else
 fi
 echo ""
 
+# Check 5b: Codex initialization
+echo "5b. Checking Codex integration..."
+if [ -f "$HOME/.codex/RTK.md" ] && [ -f "$HOME/.codex/AGENTS.md" ] && grep -q "@RTK.md" "$HOME/.codex/AGENTS.md"; then
+    echo -e "   ${GREEN}✅${NC} Global Codex config initialized (~/.codex/AGENTS.md + ~/.codex/RTK.md)"
+else
+    echo -e "   ${YELLOW}⚠️${NC}  Global Codex config not initialized"
+    echo "      Run: rtk init --global"
+fi
+echo ""
+
 # Check 6: Auto-rewrite hook
 echo "6. Checking auto-rewrite hook (optional but recommended)..."
 if [ -f "$HOME/.claude/hooks/rtk-rewrite.sh" ]; then
