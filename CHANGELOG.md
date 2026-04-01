@@ -823,3 +823,17 @@ See upstream: https://github.com/pszymkowiak/rtk
 - Configure Codex global instructions during `rtk init -g` so one global setup covers both Claude Code and Codex.
 - Extend `rtk init --show`, installer messaging, and installation checks to report Codex integration.
 - Move installation and localized README docs under `docs/` and update cross-links.
+
+## [0.34.3-security.1] (2026-04-01) — celstnblacc/rtk fork
+
+### Security
+
+* **shell-injection (C-1):** replace `sh -c` exec path with `shell_words::split()` + `Command::new(bin).args(rest)` in `run_err`/`run_test` — shell metacharacters in command strings can no longer spawn extra processes
+* **exit-code propagation (C-2):** `run_err`/`run_test` now call `std::process::exit(code)` on non-zero child exit using `exit_code_from_output()`; returns `128 + signal` for signal-killed processes per Unix convention
+* **lazy-regex (H-1):** compile `summary.rs` regexes once at startup via `lazy_static!` — eliminates per-call `Regex::new()` overhead
+* **float-arithmetic (H-2):** fix divide-by-zero panic in `cc_economics.rs` `savings_blended` calculation
+* **stash-subcommand (H-3):** replace infallible `subcommand.unwrap()` with `Some(sub @ (...))` pattern in `git.rs`
+* **telemetry-default (M-1):** `TelemetryConfig::default()` now sets `enabled: false` — no opt-in required
+* **cwd-fallback (M-2):** `resolved_command` CWD fallback uses `"."` instead of empty path on `current_dir()` failure
+* **learn-unwrap (M-3):** remove `grouped.get(&base_cmd).unwrap()` panic path in `report.rs` with `let Some(...) else { continue }`
+* **exit-code-propagation (L-2):** migrate all remaining `status.code().unwrap_or(1)` calls in `gh_cmd.rs`, `gt_cmd.rs`, `git.rs`, `main.rs` to `exit_code_from_status()`

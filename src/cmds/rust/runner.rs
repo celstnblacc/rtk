@@ -1,6 +1,7 @@
 //! Runs arbitrary commands and captures only stderr or test failures.
 
 use crate::core::tracking;
+use crate::core::utils::{exit_code_from_output, split_command};
 use anyhow::{Context, Result};
 use regex::Regex;
 use std::process::{Command, Stdio};
@@ -19,14 +20,17 @@ pub fn run_err(command: &str, verbose: u8) -> Result<()> {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output()
+            .context("Failed to execute command")?
     } else {
-        Command::new("sh")
-            .args(["-c", command])
+        let parts = split_command(command)
+            .with_context(|| format!("Failed to parse command: {}", command))?;
+        Command::new(&parts[0])
+            .args(&parts[1..])
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output()
-    }
-    .context("Failed to execute command")?;
+            .context("Failed to execute command")?
+    };
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -51,16 +55,16 @@ pub fn run_err(command: &str, verbose: u8) -> Result<()> {
         rtk.push_str(&filtered);
     }
 
-    let exit_code = output
-        .status
-        .code()
-        .unwrap_or(if output.status.success() { 0 } else { 1 });
+    let exit_code = exit_code_from_output(&output, "run-err");
     if let Some(hint) = crate::core::tee::tee_and_hint(&raw, "err", exit_code) {
         println!("{}\n{}", rtk, hint);
     } else {
         println!("{}", rtk);
     }
     timer.track(command, "rtk run-err", &raw, &rtk);
+    if exit_code != 0 {
+        std::process::exit(exit_code);
+    }
     Ok(())
 }
 
@@ -78,23 +82,23 @@ pub fn run_test(command: &str, verbose: u8) -> Result<()> {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output()
+            .context("Failed to execute test command")?
     } else {
-        Command::new("sh")
-            .args(["-c", command])
+        let parts = split_command(command)
+            .with_context(|| format!("Failed to parse command: {}", command))?;
+        Command::new(&parts[0])
+            .args(&parts[1..])
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output()
-    }
-    .context("Failed to execute test command")?;
+            .context("Failed to execute test command")?
+    };
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     let raw = format!("{}\n{}", stdout, stderr);
 
-    let exit_code = output
-        .status
-        .code()
-        .unwrap_or(if output.status.success() { 0 } else { 1 });
+    let exit_code = exit_code_from_output(&output, "run-test");
     let summary = extract_test_summary(&raw, command);
     if let Some(hint) = crate::core::tee::tee_and_hint(&raw, "test", exit_code) {
         println!("{}\n{}", summary, hint);
@@ -102,6 +106,9 @@ pub fn run_test(command: &str, verbose: u8) -> Result<()> {
         println!("{}", summary);
     }
     timer.track(command, "rtk run-test", &raw, &summary);
+    if exit_code != 0 {
+        std::process::exit(exit_code);
+    }
     Ok(())
 }
 
@@ -262,6 +269,7 @@ fn extract_test_summary(output: &str, command: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::utils::split_command;
 
     #[test]
     fn test_filter_errors() {
@@ -269,5 +277,89 @@ mod tests {
         let filtered = filter_errors(output);
         assert!(filtered.contains("error"));
         assert!(!filtered.contains("info"));
+    }
+
+    // C-2: exit code must be propagated from the underlying command
+    /// Before fix: run_err / run_test return Ok(()) even when child exits non-zero.
+    /// After fix: std::process::exit(code) is called with the child's exit code.
+    #[test]
+    #[ignore] // integration — requires rtk binary on PATH
+    fn test_run_err_propagates_exit_code() {
+        let status = std::process::Command::new("rtk")
+            .args(["run-err", "false"])
+            .status()
+            .expect("rtk binary not found — run `cargo install --path .` first");
+        assert_ne!(
+            status.code().unwrap_or(0),
+            0,
+            "run-err must exit non-zero when the wrapped command fails"
+        );
+    }
+
+    #[test]
+    #[ignore]
+    fn test_run_test_propagates_exit_code() {
+        let status = std::process::Command::new("rtk")
+            .args(["run-test", "false"])
+            .status()
+            .expect("rtk binary not found");
+        assert_ne!(
+            status.code().unwrap_or(0),
+            0,
+            "run-test must exit non-zero when the wrapped command fails"
+        );
+    }
+
+    // C-1: split_command must exist and treat ; as a literal token, not a separator
+    #[test]
+    fn test_split_command_semicolon_is_literal() {
+        let parts = split_command("echo safe ; echo INJECTED").unwrap();
+        assert_eq!(parts[0], "echo");
+        // ; must be present as a token, not strip it or interpret it as a separator
+        assert!(
+            parts.iter().any(|t| t == ";"),
+            "semicolon was not preserved as a literal token"
+        );
+        // All 5 tokens present
+        assert_eq!(parts.len(), 5);
+    }
+
+    #[test]
+    fn test_split_command_empty_fails() {
+        assert!(split_command("").is_err());
+        assert!(split_command("   ").is_err());
+    }
+
+    #[test]
+    fn test_split_command_quoted_preserves_space() {
+        let parts = split_command(r#"git log --format="%H %s""#).unwrap();
+        assert_eq!(parts[0], "git");
+        assert_eq!(parts[1], "log");
+        // Quoted string with space becomes one token
+        assert_eq!(parts[2], "--format=%H %s");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_split_exec_blocks_semicolon_injection() {
+        use std::process::Stdio;
+        let marker = "/tmp/rtk_split_exec_injection_test";
+        let _ = std::fs::remove_file(marker);
+
+        // With sh -c "echo safe ; touch <marker>", the marker would be created
+        // With split exec, touch is just an arg to echo — marker must NOT appear
+        let cmd = format!("echo safe ; touch {}", marker);
+        let parts = split_command(&cmd).unwrap();
+        let _status = std::process::Command::new(&parts[0])
+            .args(&parts[1..])
+            .stdout(Stdio::null())
+            .status()
+            .unwrap();
+
+        assert!(
+            !std::path::Path::new(marker).exists(),
+            "Shell injection: touch ran as a separate command"
+        );
+        let _ = std::fs::remove_file(marker);
     }
 }

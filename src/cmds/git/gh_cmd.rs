@@ -4,7 +4,9 @@
 //! Focuses on extracting essential information from JSON outputs.
 
 use crate::core::tracking;
-use crate::core::utils::{ok_confirmation, resolved_command, truncate};
+use crate::core::utils::{
+    exit_code_from_output, exit_code_from_status, ok_confirmation, resolved_command, truncate,
+};
 use crate::git;
 use anyhow::{Context, Result};
 use lazy_static::lazy_static;
@@ -222,7 +224,7 @@ fn list_prs(args: &[String], _verbose: u8, ultra_compact: bool) -> Result<()> {
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
         timer.track("gh pr list", "rtk gh pr list", &stderr, &stderr);
         eprintln!("{}", stderr.trim());
-        std::process::exit(output.status.code().unwrap_or(1));
+        std::process::exit(exit_code_from_output(&output, "gh"));
     }
 
     let json: Value =
@@ -333,7 +335,7 @@ fn view_pr(args: &[String], _verbose: u8, ultra_compact: bool) -> Result<()> {
             &stderr,
         );
         eprintln!("{}", stderr.trim());
-        std::process::exit(output.status.code().unwrap_or(1));
+        std::process::exit(exit_code_from_output(&output, "gh"));
     }
 
     let json: Value =
@@ -498,7 +500,7 @@ fn pr_checks(args: &[String], _verbose: u8, _ultra_compact: bool) -> Result<()> 
             &stderr,
         );
         eprintln!("{}", stderr.trim());
-        std::process::exit(output.status.code().unwrap_or(1));
+        std::process::exit(exit_code_from_output(&output, "gh"));
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -578,7 +580,7 @@ fn pr_status(_verbose: u8, _ultra_compact: bool) -> Result<()> {
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
         timer.track("gh pr status", "rtk gh pr status", &stderr, &stderr);
         eprintln!("{}", stderr.trim());
-        std::process::exit(output.status.code().unwrap_or(1));
+        std::process::exit(exit_code_from_output(&output, "gh"));
     }
 
     let json: Value =
@@ -633,7 +635,7 @@ fn list_issues(args: &[String], _verbose: u8, ultra_compact: bool) -> Result<()>
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
         timer.track("gh issue list", "rtk gh issue list", &stderr, &stderr);
         eprintln!("{}", stderr.trim());
-        std::process::exit(output.status.code().unwrap_or(1));
+        std::process::exit(exit_code_from_output(&output, "gh"));
     }
 
     let json: Value =
@@ -717,7 +719,7 @@ fn view_issue(args: &[String], _verbose: u8) -> Result<()> {
             &stderr,
         );
         eprintln!("{}", stderr.trim());
-        std::process::exit(output.status.code().unwrap_or(1));
+        std::process::exit(exit_code_from_output(&output, "gh"));
     }
 
     let json: Value =
@@ -813,7 +815,7 @@ fn list_runs(args: &[String], _verbose: u8, ultra_compact: bool) -> Result<()> {
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
         timer.track("gh run list", "rtk gh run list", &stderr, &stderr);
         eprintln!("{}", stderr.trim());
-        std::process::exit(output.status.code().unwrap_or(1));
+        std::process::exit(exit_code_from_output(&output, "gh"));
     }
 
     let json: Value =
@@ -913,7 +915,7 @@ fn view_run(args: &[String], _verbose: u8) -> Result<()> {
             &stderr,
         );
         eprintln!("{}", stderr.trim());
-        std::process::exit(output.status.code().unwrap_or(1));
+        std::process::exit(exit_code_from_output(&output, "gh"));
     }
 
     // Parse output and show only failures
@@ -990,7 +992,7 @@ fn run_repo(args: &[String], _verbose: u8, _ultra_compact: bool) -> Result<()> {
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
         timer.track("gh repo view", "rtk gh repo view", &stderr, &stderr);
         eprintln!("{}", stderr.trim());
-        std::process::exit(output.status.code().unwrap_or(1));
+        std::process::exit(exit_code_from_output(&output, "gh"));
     }
 
     let json: Value =
@@ -1050,7 +1052,7 @@ fn pr_create(args: &[String], _verbose: u8) -> Result<()> {
     if !output.status.success() {
         timer.track("gh pr create", "rtk gh pr create", &stderr, &stderr);
         eprintln!("{}", stderr.trim());
-        std::process::exit(output.status.code().unwrap_or(1));
+        std::process::exit(exit_code_from_output(&output, "gh"));
     }
 
     // gh pr create outputs the URL on success
@@ -1088,7 +1090,7 @@ fn pr_merge(args: &[String], _verbose: u8) -> Result<()> {
     if !output.status.success() {
         timer.track("gh pr merge", "rtk gh pr merge", &stderr, &stderr);
         eprintln!("{}", stderr.trim());
-        std::process::exit(output.status.code().unwrap_or(1));
+        std::process::exit(exit_code_from_output(&output, "gh"));
     }
 
     // Extract PR number from args (first non-flag arg)
@@ -1160,7 +1162,7 @@ fn pr_diff(args: &[String], _verbose: u8) -> Result<()> {
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
         timer.track("gh pr diff", "rtk gh pr diff", &stderr, &stderr);
         eprintln!("{}", stderr.trim());
-        std::process::exit(output.status.code().unwrap_or(1));
+        std::process::exit(exit_code_from_output(&output, "gh"));
     }
 
     let filtered = if raw.trim().is_empty() {
@@ -1202,7 +1204,7 @@ fn pr_action(action: &str, args: &[String], _verbose: u8) -> Result<()> {
             &stderr,
         );
         eprintln!("{}", stderr.trim());
-        std::process::exit(output.status.code().unwrap_or(1));
+        std::process::exit(exit_code_from_output(&output, "gh"));
     }
 
     // Extract PR number from args (skip args[0] which is the subcommand)
@@ -1264,7 +1266,7 @@ fn run_passthrough_with_extra(cmd: &str, base_args: &[&str], extra_args: &[Strin
     timer.track_passthrough(&full_cmd, &format!("rtk {} (passthrough)", full_cmd));
 
     if !status.success() {
-        std::process::exit(status.code().unwrap_or(1));
+        std::process::exit(exit_code_from_status(&status, &full_cmd));
     }
 
     Ok(())
@@ -1284,13 +1286,11 @@ fn run_passthrough(cmd: &str, subcommand: &str, args: &[String]) -> Result<()> {
         .context(format!("Failed to run {} {}", cmd, subcommand))?;
 
     let args_str = tracking::args_display(&args.iter().map(|s| s.into()).collect::<Vec<_>>());
-    timer.track_passthrough(
-        &format!("{} {} {}", cmd, subcommand, args_str),
-        &format!("rtk {} {} {} (passthrough)", cmd, subcommand, args_str),
-    );
+    let label = format!("{} {} {}", cmd, subcommand, args_str);
+    timer.track_passthrough(&label, &format!("rtk {} (passthrough)", label));
 
     if !status.success() {
-        std::process::exit(status.code().unwrap_or(1));
+        std::process::exit(exit_code_from_status(&status, &label));
     }
 
     Ok(())

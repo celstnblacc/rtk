@@ -31,6 +31,7 @@ sha2 = "0.10"
 flate2 = "1.0"
 quick-xml = "0.37"
 which = "8"
+shell-words = "1"
 
 [build-dependencies]
 toml = "0.8"
