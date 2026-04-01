@@ -1106,7 +1106,7 @@ fn run_fallback(parse_error: clap::Error) -> Result<()> {
                     core::tee::tee_and_hint(
                         &stdout_raw,
                         &raw_command,
-                        output.status.code().unwrap_or(1),
+                        core::utils::exit_code_from_output(&output, &raw_command),
                     )
                 } else {
                     None
@@ -1127,7 +1127,7 @@ fn run_fallback(parse_error: clap::Error) -> Result<()> {
                 core::tracking::record_parse_failure_silent(&raw_command, &error_message, true);
 
                 if !output.status.success() {
-                    std::process::exit(output.status.code().unwrap_or(1));
+                    std::process::exit(core::utils::exit_code_from_output(&output, &raw_command));
                 }
             }
             Err(e) => {
@@ -1944,7 +1944,10 @@ fn main() -> Result<()> {
                                     &format!("rtk npx {} (passthrough)", args_str),
                                 );
                                 if !status.success() {
-                                    std::process::exit(status.code().unwrap_or(1));
+                                    std::process::exit(core::utils::exit_code_from_status(
+                                        &status,
+                                        &format!("npx {}", args_str),
+                                    ));
                                 }
                             }
                         }
@@ -1956,7 +1959,10 @@ fn main() -> Result<()> {
                             .context("Failed to run npx prisma")?;
                         timer.track_passthrough("npx prisma", "rtk npx prisma (passthrough)");
                         if !status.success() {
-                            std::process::exit(status.code().unwrap_or(1));
+                            std::process::exit(core::utils::exit_code_from_status(
+                                &status,
+                                "npx prisma",
+                            ));
                         }
                     }
                 }
@@ -2182,7 +2188,7 @@ fn main() -> Result<()> {
 
             // Exit with same code as child process
             if !status.success() {
-                std::process::exit(status.code().unwrap_or(1));
+                std::process::exit(core::utils::exit_code_from_status(&status, "proxy"));
             }
         }
 

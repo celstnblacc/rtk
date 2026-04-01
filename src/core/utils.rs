@@ -207,6 +207,20 @@ pub fn ok_confirmation(action: &str, detail: &str) -> String {
     }
 }
 
+/// Split a shell command string into binary + arguments using POSIX word splitting.
+///
+/// Unlike `sh -c`, this does NOT interpret shell metacharacters (`;`, `&&`, `||`, `|`).
+/// Each token is passed as a literal argument to the subprocess — no shell injection possible.
+///
+/// # Errors
+/// Returns an error if the command string is empty or has unmatched quotes.
+pub fn split_command(command: &str) -> Result<Vec<String>> {
+    if command.trim().is_empty() {
+        anyhow::bail!("Empty command string");
+    }
+    shell_words::split(command).with_context(|| format!("Failed to parse command: {}", command))
+}
+
 /// Extract exit code from a process output. Returns the actual exit code, or
 /// `128 + signal` per Unix convention when terminated by a signal (no exit code
 /// available). Falls back to 1 on non-Unix platforms.
@@ -218,6 +232,26 @@ pub fn exit_code_from_output(output: &std::process::Output, label: &str) -> i32 
             {
                 use std::os::unix::process::ExitStatusExt;
                 if let Some(sig) = output.status.signal() {
+                    eprintln!("[rtk] {}: process terminated by signal {}", label, sig);
+                    return 128 + sig;
+                }
+            }
+            eprintln!("[rtk] {}: process terminated by signal", label);
+            1
+        }
+    }
+}
+
+/// Extract exit code from an ExitStatus. Returns the actual exit code, or
+/// `128 + signal` per Unix convention when terminated by a signal.
+pub fn exit_code_from_status(status: &std::process::ExitStatus, label: &str) -> i32 {
+    match status.code() {
+        Some(code) => code,
+        None => {
+            #[cfg(unix)]
+            {
+                use std::os::unix::process::ExitStatusExt;
+                if let Some(sig) = status.signal() {
                     eprintln!("[rtk] {}: process terminated by signal {}", label, sig);
                     return 128 + sig;
                 }
@@ -339,21 +373,21 @@ pub fn resolve_binary(name: &str) -> Result<PathBuf> {
 pub fn resolved_command(name: &str) -> Command {
     let mut cmd = match resolve_binary(name) {
         Ok(path) => Command::new(path),
-        Err(e) => {
+        Err(_e) => {
             // On Windows, resolution failure likely means a .CMD/.BAT wrapper
             // wasn't found — always warn so users have a signal.
             // On Unix, this is less common; only log in debug builds.
             #[cfg(target_os = "windows")]
             eprintln!(
                 "rtk: Failed to resolve '{}' via PATH, falling back to direct exec: {}",
-                name, e
+                name, _e
             );
             #[cfg(not(target_os = "windows"))]
             {
                 #[cfg(debug_assertions)]
                 eprintln!(
                     "rtk: Failed to resolve '{}' via PATH, falling back to direct exec: {}",
-                    name, e
+                    name, _e
                 );
             }
             Command::new(name)
@@ -389,7 +423,8 @@ pub fn git_worktree_root() -> std::path::PathBuf {
         .filter(|o| o.status.success())
         .and_then(|o| String::from_utf8(o.stdout).ok())
         .map(|s| std::path::PathBuf::from(s.trim()))
-        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default())
+        // M-2: unwrap_or_default() returns an empty path on failure; use "." instead.
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
 }
 
 #[cfg(test)]

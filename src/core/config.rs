@@ -94,7 +94,8 @@ pub struct TelemetryConfig {
 
 impl Default for TelemetryConfig {
     fn default() -> Self {
-        Self { enabled: true }
+        // M-1: disabled by default in this fork — telemetry functionality has been stripped.
+        Self { enabled: false }
     }
 }
 
