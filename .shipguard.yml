@@ -9,11 +9,17 @@ exclude_paths:
   - "node_modules/**"
   - "**/fixtures/**"
   - "**/__snapshots__/**"
-  # Test and developer scripts — not production code
+  # Installer and test/developer scripts — not production code
   - "scripts/**"
+  # SHELL-005 false positive: ${GREEN}/${NC} ANSI color vars in printf format strings
+  # are flagged as JSON variable interpolation — they are not JSON
+  - "install.sh"
   # Claude Code hook files — SHELL-002 false positives: $updated inside jq
   # single-quoted filter strings is a jq variable, not a shell variable
   - ".claude/**"
+  # Hook test harnesses — SHELL-005 false positives: echo "$input_json" | bash "$HOOK"
+  # pipes pre-constructed test fixtures, not user-controlled JSON being built via interpolation
+  - "hooks/*/test-*.sh"
 
 # Accepted risks (reviewed 2026-04-01)
 disable_rules:
