@@ -96,6 +96,7 @@ rtk init -g
 # → Installs hook to ~/.claude/hooks/rtk-rewrite.sh
 # → Creates ~/.claude/RTK.md (10 lines, meta commands only)
 # → Adds @RTK.md reference to ~/.claude/CLAUDE.md
+# → Creates ~/.codex/RTK.md + adds @RTK.md to ~/.codex/AGENTS.md
 # → Prompts: "Patch settings.json? [y/N]"
 # → If yes: patches + creates backup (~/.claude/settings.json.bak)
 

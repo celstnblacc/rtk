@@ -17,13 +17,13 @@
 <p align="center">
   <a href="https://www.rtk-ai.app">Sitio web</a> &bull;
   <a href="#instalacion">Instalar</a> &bull;
-  <a href="docs/TROUBLESHOOTING.md">Solucion de problemas</a> &bull;
-  <a href="ARCHITECTURE.md">Arquitectura</a> &bull;
+  <a href="TROUBLESHOOTING.md">Solucion de problemas</a> &bull;
+  <a href="../ARCHITECTURE.md">Arquitectura</a> &bull;
   <a href="https://discord.gg/RySmvNF5kF">Discord</a>
 </p>
 
 <p align="center">
-  <a href="README.md">English</a> &bull;
+  <a href="../README.md">English</a> &bull;
   <a href="README_fr.md">Francais</a> &bull;
   <a href="README_zh.md">中文</a> &bull;
   <a href="README_ja.md">日本語</a> &bull;
@@ -144,9 +144,9 @@ rtk discover                    # Descubrir ahorros perdidos
 
 ## Documentacion
 
-- **[TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)** - Resolver problemas comunes
+- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Resolver problemas comunes
 - **[INSTALL.md](INSTALL.md)** - Guia de instalacion detallada
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Arquitectura tecnica
+- **[ARCHITECTURE.md](../ARCHITECTURE.md)** - Arquitectura tecnica
 
 ## Contribuir
 
@@ -156,4 +156,4 @@ Unete a la comunidad en [Discord](https://discord.gg/RySmvNF5kF).
 
 ## Licencia
 
-Licencia MIT - ver [LICENSE](LICENSE) para detalles.
+Licencia MIT - ver [LICENSE](../LICENSE) para detalles.

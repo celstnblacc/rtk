@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Force tracking tests to use a writable temp DB path during hook execution.
+tmp_db="$(mktemp /tmp/rtk-precommit-db.XXXXXX.sqlite3)"
+trap 'rm -f "$tmp_db"' EXIT
+
+RTK_DB_PATH="$tmp_db" cargo test

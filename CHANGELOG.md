@@ -814,3 +814,12 @@ See upstream: https://github.com/pszymkowiak/rtk
 
 - **Repository**: https://github.com/rtk-ai/rtk (maintained by pszymkowiak)
 - **Issues**: https://github.com/rtk-ai/rtk/issues
+## [Unreleased]
+
+### Added
+- Add a project-specific `.project-hooks/pre-commit` scaffold that runs `cargo test`.
+
+### Changed
+- Configure Codex global instructions during `rtk init -g` so one global setup covers both Claude Code and Codex.
+- Extend `rtk init --show`, installer messaging, and installation checks to report Codex integration.
+- Move installation and localized README docs under `docs/` and update cross-links.
