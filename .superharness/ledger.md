@@ -184,3 +184,5 @@ Append-only activity log. Never edit previous entries.
 2026-04-01T15:18:11Z session-stop: snapshot written to session-progress.md (branch: fix/all-security)
 - 2026-04-01T15:23:18Z — claude-code — modified: hashed-dreaming-teacup.md
 - 2026-04-02T09:30:18Z — claude-code — modified: CLAUDE.md
+2026-04-02T09:33:02Z session-stop: snapshot written to session-progress.md (branch: chore/add-scaffold-files-gitignore)
+2026-04-02T09:33:18Z session-stop: snapshot written to session-progress.md (branch: chore/add-scaffold-files-gitignore)
