@@ -12,14 +12,34 @@ pub enum PermissionVerdict {
     Ask,
 }
 
-/// Check `cmd` against Claude Code's deny/ask permission rules.
+/// Check `cmd` against Claude Code's deny/ask/allow permission rules.
 ///
-/// Returns `Allow` when no rules match (preserves existing behavior),
-/// `Deny` when a deny rule matches, or `Ask` when an ask rule matches.
+/// Returns `Allow` when no rules match and no allow list is configured,
+/// `Deny` when a deny rule matches, `Ask` when an ask rule matches or when
+/// an allow list is configured and the command is not on it.
 /// Deny takes priority over Ask if both match the same command.
 pub fn check_command(cmd: &str) -> PermissionVerdict {
     let (deny_rules, ask_rules) = load_deny_ask_rules();
-    check_command_with_rules(cmd, &deny_rules, &ask_rules)
+    let verdict = check_command_with_rules(cmd, &deny_rules, &ask_rules);
+
+    // fix #886: if the user has configured an explicit allow list, enforce it.
+    // Any command not on the allow list falls through to Ask (requires confirmation),
+    // matching Claude Code's documented whitelist-by-default behaviour.
+    // Backward-compatible: no allow list configured → existing Allow behaviour preserved.
+    if verdict == PermissionVerdict::Allow {
+        if let Some(allow_rules) = load_allow_rules() {
+            let segments = split_compound_command(cmd);
+            let all_allowed = segments.iter().all(|seg| {
+                let seg = seg.trim();
+                seg.is_empty() || allow_rules.iter().any(|p| command_matches_pattern(seg, p))
+            });
+            if !all_allowed {
+                return PermissionVerdict::Ask;
+            }
+        }
+    }
+
+    verdict
 }
 
 /// Internal implementation allowing tests to inject rules without file I/O.
@@ -89,6 +109,35 @@ fn load_deny_ask_rules() -> (Vec<String>, Vec<String>) {
     }
 
     (deny_rules, ask_rules)
+}
+
+/// Load the allow list from Claude Code settings files.
+///
+/// Returns `None` when no allow list is configured — preserving existing behaviour
+/// where RTK auto-allows any command not explicitly denied.
+/// Returns `Some(patterns)` when an allow list is present; callers must confirm
+/// the command matches at least one pattern before auto-allowing.
+fn load_allow_rules() -> Option<Vec<String>> {
+    let mut allow_rules = Vec::new();
+
+    for path in get_settings_paths() {
+        let Ok(content) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) else {
+            continue;
+        };
+        let Some(permissions) = json.get("permissions") else {
+            continue;
+        };
+        append_bash_rules(permissions.get("allow"), &mut allow_rules);
+    }
+
+    if allow_rules.is_empty() {
+        None
+    } else {
+        Some(allow_rules)
+    }
 }
 
 /// Extract Bash-scoped patterns from a JSON array and append them to `target`.
@@ -457,5 +506,53 @@ mod tests {
             check_command_with_rules("rm -rf /", &deny, &[]),
             PermissionVerdict::Deny
         );
+    }
+
+    // fix #886: allow list enforcement via check_command_with_rules
+    // (tests the logic layer; file I/O is skipped by using the internal fn directly)
+
+    #[test]
+    fn test_no_allow_list_preserves_allow_verdict() {
+        // When load_allow_rules returns None (no allow list configured),
+        // commands not matching deny/ask return Allow — backward-compatible.
+        assert_eq!(
+            check_command_with_rules("ls -la", &[], &[]),
+            PermissionVerdict::Allow
+        );
+    }
+
+    #[test]
+    fn test_allow_list_logic_match() {
+        // Simulate the allow-list gate: command IS on the allow list → Allow.
+        let allow_rules = vec!["ls".to_string(), "git status".to_string()];
+        let matched = allow_rules
+            .iter()
+            .any(|p| command_matches_pattern("ls -la", p));
+        assert!(matched, "ls -la should match allow pattern 'ls'");
+    }
+
+    #[test]
+    fn test_allow_list_logic_no_match() {
+        // Command is NOT on the allow list → should become Ask (not Allow).
+        let allow_rules = vec!["git status".to_string()];
+        let matched = allow_rules
+            .iter()
+            .any(|p| command_matches_pattern("rm -rf /tmp/foo", p));
+        assert!(
+            !matched,
+            "rm should not match allow list containing only 'git status'"
+        );
+    }
+
+    #[test]
+    fn test_allow_list_wildcard() {
+        // Wildcard allow rules work correctly.
+        let allow_rules = vec!["git *".to_string()];
+        assert!(allow_rules
+            .iter()
+            .any(|p| command_matches_pattern("git log -10", p)));
+        assert!(!allow_rules
+            .iter()
+            .any(|p| command_matches_pattern("rm -rf /", p)));
     }
 }

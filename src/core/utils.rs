@@ -368,6 +368,25 @@ pub fn tool_exists(name: &str) -> bool {
     which::which(name).is_ok()
 }
 
+/// Return the git worktree root for the current directory, or fall back to CWD.
+///
+/// Uses `git rev-parse --show-toplevel` which returns the worktree root (not the
+/// main repo root), making this safe for use inside git worktrees.
+///
+/// Used by `rtk init --codex` to anchor RTK.md and AGENTS.md to the repo root
+/// rather than the process CWD — fixes #892.
+pub fn git_worktree_root() -> std::path::PathBuf {
+    std::process::Command::new("git")
+        .args(["rev-parse", "--show-toplevel"])
+        .stdin(std::process::Stdio::null())
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| std::path::PathBuf::from(s.trim()))
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
