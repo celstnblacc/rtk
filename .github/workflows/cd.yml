@@ -79,7 +79,7 @@ jobs:
             exit 1
           fi
 
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
   build-prerelease:
     name: Build pre-release

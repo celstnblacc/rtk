@@ -46,3 +46,5 @@ claudedocs
 
 # icm 
 .fastembed_cache/
+.serena/
+excalidraw.log

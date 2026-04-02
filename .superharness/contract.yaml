@@ -1,0 +1,21 @@
+# Active contract for rtk
+id: initial-setup
+created: 2026-03-31
+created_by: owner
+status: draft
+
+goal: "TBD — describe the current objective"
+
+tasks: []
+
+decisions: []
+
+failures: []
+
+# Task schema (recommended):
+# tasks:
+#   - id: "task-id"
+#     title: "Task title"
+#     status: "todo|in_progress|done"
+#     owner: "claude-code|codex-cli"
+#     project_path: "/Users/airm2max/DevOpsSec/rtk"
