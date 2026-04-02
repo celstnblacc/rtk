@@ -869,3 +869,11 @@ per host you want logged. Reversible via `keylogger-mcp unwrap`. Aligns with til
 - feat(doctor): add `rtk doctor` health check command (hook, DB, PATH, config, failure rate; --json output for token-diet integration)
 - chore: add .superharness/.gitignore, GEMINI.md; propagate Strict Installation Decoupling rule to AGENTS.md and CLAUDE.md
 - 2026-06-25: chore: remove personal workspace path from tracked files
+
+## [Unreleased] — security/permission-engine-hardening
+
+### Security
+
+- **permissions:** cherry-picked upstream `41a6c6b` (rtk-ai/rtk #886) — `check_command()` now calls `load_permission_rules()` directly with unconditional Deny > Ask > Allow > Default precedence, replacing this fork's own weaker port which fell back to `Allow` whenever no allow list was configured at all. Removed the now-dead `load_allow_rules()` bolt-on.
+- **hook_cmd (VS Code):** fixed `handle_vscode()` hardcoding `"permissionDecision": "allow"` regardless of the computed verdict — every rewritten command was auto-allowed for the VS Code Copilot hook path, ignoring Deny/Ask entirely. Now uses the computed `decision`.
+- Cherry-pick of upstream `41a6c6b` only (compound-command allow-escalation fix `40c9dbc`, never-auto-allow decomposition `952245d`, and redirect-bypass fix `e16aa26` tracked separately — see token-diet issue artificemachine/token-diet#5).

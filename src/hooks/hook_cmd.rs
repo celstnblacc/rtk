@@ -5,6 +5,7 @@ use serde_json::{json, Value};
 use std::io::{self, Read};
 
 use crate::discover::registry::rewrite_command;
+use crate::hooks::permissions::{check_command, PermissionVerdict};
 
 // ── Copilot hook (VS Code + Copilot CLI) ──────────────────────
 
@@ -110,10 +111,24 @@ fn handle_vscode(cmd: &str) -> Result<()> {
         None => return Ok(()),
     };
 
+    let verdict = check_command(cmd);
+
+    // Deny: pass through without rewrite — let the host tool handle it.
+    if verdict == PermissionVerdict::Deny {
+        return Ok(());
+    }
+
+    // Allow (explicit rule matched): auto-allow the rewritten command.
+    // Ask/Default (no allow rule matched): rewrite but let the host tool prompt.
+    let decision = match verdict {
+        PermissionVerdict::Allow => "allow",
+        _ => "ask",
+    };
+
     let output = json!({
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
-            "permissionDecision": "allow",
+            "permissionDecision": decision,
             "permissionDecisionReason": "RTK auto-rewrite",
             "updatedInput": { "command": rewritten }
         }
@@ -166,6 +181,12 @@ pub fn run_gemini() -> Result<()> {
 
     if cmd.is_empty() {
         print_allow();
+        return Ok(());
+    }
+
+    // Check deny rules — Gemini CLI only supports allow/deny (no ask mode).
+    if check_command(cmd) == PermissionVerdict::Deny {
+        println!(r#"{{"decision":"deny","reason":"Blocked by RTK permission rule"}}"#);
         return Ok(());
     }
 
