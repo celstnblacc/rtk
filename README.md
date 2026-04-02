@@ -33,6 +33,30 @@
 
 ---
 
+## This Fork
+
+**Upstream:** [rtk-ai/rtk](https://github.com/rtk-ai/rtk) — forked as [celstnblacc/rtk](https://github.com/celstnblacc/rtk) for use in the [token-diet](https://github.com/celstnblacc/token-diet) stack.
+
+**Why we forked:** The upstream binary is used as a Claude Code hook that proxies every shell command. Any security issue in the proxy affects every command the agent runs. We found CRITICAL/HIGH findings on first audit.
+
+**Security fixes applied (v0.34.3+):**
+
+| Severity | ID | Fix |
+|----------|----|-----|
+| CRITICAL | C-1 | **Shell injection** — `run-err`, `run-test`, and `summary` used `sh -c <user-string>`. Replaced with `shell-words::split()` + `Command::new(bin).args(rest)`. Metacharacters (`;`, `&&`, `\|`) are no longer interpreted by a shell. |
+| CRITICAL | C-2 | **Exit code lost** — all three commands returned `Ok(())` regardless of child exit code. CI/CD pipelines saw success even on failure. Fixed with `std::process::exit(exit_code)`. |
+| HIGH | H-1 | **Non-lazy regex** — `Regex::new()` inside `extract_number()` recompiled on every call. Replaced with four `lazy_static!` statics. |
+| HIGH | H-2 | **Production `unwrap()`** in `cc_economics.rs` — rewrote to extract local variable. |
+| HIGH | H-3 | **Production `unwrap()`** in `git.rs` stash match arm — rewrote as `Some(sub @ ("pop" \| ...))` binding. |
+| MEDIUM | M-1 | **Telemetry default `true`** — `TelemetryConfig::default()` shipped with `enabled: true`; telemetry is stripped in this fork so the default is now `false`. |
+| MEDIUM | M-2 | **CWD fallback empty path** — `unwrap_or_default()` on `current_dir()` returns `""` on failure. Changed to `unwrap_or_else(\|_\| PathBuf::from("."))`. |
+| MEDIUM | M-3 | **`unwrap()` in `learn/report.rs`** — `grouped.get(&base_cmd).unwrap()` replaced with `let Some(...) else { continue }`. |
+| LOW | L-2 | **Signal exit codes** — `status.code().unwrap_or(1)` returns 1 for signal-killed processes, masking the real cause. Migrated all ~40 call sites to `exit_code_from_output/status()` which returns `128 + signal`. |
+
+All fixes include TDD tests (RED → GREEN → REFACTOR). Run `cargo test --all` to verify.
+
+---
+
 rtk filters and compresses command outputs before they reach your LLM context. Single Rust binary, 100+ supported commands, <10ms overhead.
 
 ## Token Savings (30-min Claude Code Session)

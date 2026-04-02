@@ -1,7 +1,10 @@
 //! Filters Graphite (gt) CLI output for stacking workflows.
 
 use crate::core::tracking;
-use crate::core::utils::{ok_confirmation, resolved_command, strip_ansi, truncate};
+use crate::core::utils::{
+    exit_code_from_output, exit_code_from_status, ok_confirmation, resolved_command, strip_ansi,
+    truncate,
+};
 use anyhow::{Context, Result};
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -52,7 +55,7 @@ fn run_gt_filtered(
     let stderr = String::from_utf8_lossy(&cmd_output.stderr);
     let raw = format!("{}\n{}", stdout, stderr);
 
-    let exit_code = cmd_output.status.code().unwrap_or(1);
+    let exit_code = exit_code_from_output(&cmd_output, &format!("gt {}", subcmd_str));
 
     let clean = strip_ansi(stdout.trim());
     let output = if verbose > 0 {
@@ -197,7 +200,7 @@ fn passthrough_gt(subcommand: &str, args: &[String], verbose: u8) -> Result<()> 
     );
 
     if !status.success() {
-        std::process::exit(status.code().unwrap_or(1));
+        std::process::exit(exit_code_from_status(&status, &format!("gt {}", args_str)));
     }
 
     Ok(())

@@ -1,7 +1,7 @@
 //! Runs a command and produces a heuristic summary of its output.
 
 use crate::core::tracking;
-use crate::core::utils::truncate;
+use crate::core::utils::{exit_code_from_output, split_command, truncate};
 use anyhow::{Context, Result};
 use regex::Regex;
 use std::process::{Command, Stdio};
@@ -20,22 +20,29 @@ pub fn run(command: &str, verbose: u8) -> Result<()> {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output()
+            .context("Failed to execute command")?
     } else {
-        Command::new("sh")
-            .args(["-c", command])
+        let parts = split_command(command)
+            .with_context(|| format!("Failed to parse command: {}", command))?;
+        Command::new(&parts[0])
+            .args(&parts[1..])
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output()
-    }
-    .context("Failed to execute command")?;
+            .context("Failed to execute command")?
+    };
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     let raw = format!("{}\n{}", stdout, stderr);
 
+    let exit_code = exit_code_from_output(&output, "summary");
     let summary = summarize_output(&raw, command, output.status.success());
     println!("{}", summary);
     timer.track(command, "rtk summary", &raw, &summary);
+    if exit_code != 0 {
+        std::process::exit(exit_code);
+    }
     Ok(())
 }
 
@@ -292,9 +299,61 @@ fn summarize_generic(output: &str, result: &mut Vec<String>) {
     }
 }
 
+lazy_static::lazy_static! {
+    // H-1: Pre-compiled regexes — never recompile on each call to extract_number.
+    // The `after` argument is always one of these four fixed strings.
+    static ref RE_PASSED:  Regex = Regex::new(r"(\d+)\s*passed").unwrap();
+    static ref RE_FAILED:  Regex = Regex::new(r"(\d+)\s*failed").unwrap();
+    static ref RE_SKIPPED: Regex = Regex::new(r"(\d+)\s*skipped").unwrap();
+    static ref RE_IGNORED: Regex = Regex::new(r"(\d+)\s*ignored").unwrap();
+}
+
 fn extract_number(text: &str, after: &str) -> Option<usize> {
-    let re = Regex::new(&format!(r"(\d+)\s*{}", after)).ok()?;
+    let re = match after {
+        "passed" => &*RE_PASSED,
+        "failed" => &*RE_FAILED,
+        "skipped" => &*RE_SKIPPED,
+        "ignored" => &*RE_IGNORED,
+        _ => return None,
+    };
     re.captures(text)
         .and_then(|c| c.get(1))
         .and_then(|m| m.as_str().parse().ok())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // H-1: extract_number must use pre-compiled regexes (no Regex::new inside function)
+    #[test]
+    fn test_extract_number_passed() {
+        assert_eq!(extract_number("42 passed, 0 failed", "passed"), Some(42));
+    }
+
+    #[test]
+    fn test_extract_number_failed() {
+        assert_eq!(extract_number("3 failed, 10 passed", "failed"), Some(3));
+    }
+
+    #[test]
+    fn test_extract_number_skipped() {
+        assert_eq!(extract_number("5 skipped", "skipped"), Some(5));
+    }
+
+    #[test]
+    fn test_extract_number_ignored() {
+        assert_eq!(extract_number("2 ignored", "ignored"), Some(2));
+    }
+
+    #[test]
+    fn test_extract_number_unknown_returns_none() {
+        // Unknown keyword — must not panic, must return None
+        assert_eq!(extract_number("10 tests", "tests"), None);
+    }
+
+    #[test]
+    fn test_extract_number_no_match() {
+        assert_eq!(extract_number("no results here", "passed"), None);
+    }
 }

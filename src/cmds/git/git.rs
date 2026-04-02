@@ -2,7 +2,7 @@
 
 use crate::core::config;
 use crate::core::tracking;
-use crate::core::utils::resolved_command;
+use crate::core::utils::{exit_code_from_output, exit_code_from_status, resolved_command};
 use anyhow::{Context, Result};
 use std::ffi::OsString;
 use std::process::Command;
@@ -90,7 +90,7 @@ fn run_diff(
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             eprintln!("{}", stderr);
-            std::process::exit(output.status.code().unwrap_or(1));
+            std::process::exit(exit_code_from_output(&output, "git"));
         }
 
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -129,7 +129,7 @@ fn run_diff(
             &raw,
             &raw,
         );
-        std::process::exit(output.status.code().unwrap_or(1));
+        std::process::exit(exit_code_from_output(&output, "git"));
     }
 
     if verbose > 0 {
@@ -199,7 +199,7 @@ fn run_show(
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             eprintln!("{}", stderr);
-            std::process::exit(output.status.code().unwrap_or(1));
+            std::process::exit(exit_code_from_output(&output, "git"));
         }
         let stdout = String::from_utf8_lossy(&output.stdout);
         if wants_blob_show {
@@ -239,7 +239,7 @@ fn run_show(
     if !summary_output.status.success() {
         let stderr = String::from_utf8_lossy(&summary_output.stderr);
         eprintln!("{}", stderr);
-        std::process::exit(summary_output.status.code().unwrap_or(1));
+        std::process::exit(exit_code_from_output(&summary_output, "git show"));
     }
     let summary = String::from_utf8_lossy(&summary_output.stdout);
     println!("{}", summary.trim());
@@ -445,7 +445,7 @@ fn run_log(
         let stderr = String::from_utf8_lossy(&output.stderr);
         eprintln!("{}", stderr);
         // Propagate git's exit code
-        std::process::exit(output.status.code().unwrap_or(1));
+        std::process::exit(exit_code_from_output(&output, "git"));
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -765,7 +765,7 @@ fn run_status(args: &[String], verbose: u8, global_args: &[String]) -> Result<()
                 &raw,
                 &raw,
             );
-            std::process::exit(output.status.code().unwrap_or(1));
+            std::process::exit(exit_code_from_output(&output, "git"));
         }
 
         if verbose > 0 || !stderr.is_empty() {
@@ -806,7 +806,7 @@ fn run_status(args: &[String], verbose: u8, global_args: &[String]) -> Result<()
         let message = "Not a git repository".to_string();
         eprintln!("{}", message);
         timer.track("git status", "rtk git status", &raw_output, &message);
-        std::process::exit(output.status.code().unwrap_or(128));
+        std::process::exit(exit_code_from_output(&output, "git status"));
     }
 
     let formatted = format_status_output(&stdout);
@@ -885,7 +885,7 @@ fn run_add(args: &[String], verbose: u8, global_args: &[String]) -> Result<()> {
             eprintln!("{}", stdout);
         }
         // Propagate git's exit code
-        std::process::exit(output.status.code().unwrap_or(1));
+        std::process::exit(exit_code_from_output(&output, "git"));
     }
 
     Ok(())
@@ -954,7 +954,7 @@ fn run_commit(args: &[String], verbose: u8, global_args: &[String]) -> Result<()
                 eprint!("{}", stdout);
             }
             timer.track(&original_cmd, "rtk git commit", &raw_output, &raw_output);
-            std::process::exit(output.status.code().unwrap_or(1));
+            std::process::exit(exit_code_from_output(&output, "git"));
         }
     }
 
@@ -1017,7 +1017,7 @@ fn run_push(args: &[String], verbose: u8, global_args: &[String]) -> Result<()> 
         if !stdout.trim().is_empty() {
             eprintln!("{}", stdout);
         }
-        std::process::exit(output.status.code().unwrap_or(1));
+        std::process::exit(exit_code_from_output(&output, "git"));
     }
 
     Ok(())
@@ -1103,7 +1103,7 @@ fn run_pull(args: &[String], verbose: u8, global_args: &[String]) -> Result<()> 
         if !stdout.trim().is_empty() {
             eprintln!("{}", stdout);
         }
-        std::process::exit(output.status.code().unwrap_or(1));
+        std::process::exit(exit_code_from_output(&output, "git"));
     }
 
     Ok(())
@@ -1183,7 +1183,7 @@ fn run_branch(args: &[String], verbose: u8, global_args: &[String]) -> Result<()
             if !stderr.trim().is_empty() {
                 eprintln!("{}", stderr);
             }
-            std::process::exit(output.status.code().unwrap_or(1));
+            std::process::exit(exit_code_from_output(&output, "git"));
         }
         return Ok(());
     }
@@ -1223,7 +1223,7 @@ fn run_branch(args: &[String], verbose: u8, global_args: &[String]) -> Result<()
             if !stdout.trim().is_empty() {
                 eprintln!("{}", stdout);
             }
-            std::process::exit(output.status.code().unwrap_or(1));
+            std::process::exit(exit_code_from_output(&output, "git"));
         }
         return Ok(());
     }
@@ -1254,7 +1254,7 @@ fn run_branch(args: &[String], verbose: u8, global_args: &[String]) -> Result<()
             &raw,
             &raw,
         );
-        std::process::exit(output.status.code().unwrap_or(1));
+        std::process::exit(exit_code_from_output(&output, "git"));
     }
 
     let filtered = filter_branch_output(&stdout);
@@ -1347,7 +1347,7 @@ fn run_fetch(args: &[String], verbose: u8, global_args: &[String]) -> Result<()>
         if !stderr.trim().is_empty() {
             eprintln!("{}", stderr);
         }
-        std::process::exit(output.status.code().unwrap_or(1));
+        std::process::exit(exit_code_from_output(&output, "git"));
     }
 
     // Count new refs from stderr (git fetch outputs to stderr)
@@ -1422,8 +1422,7 @@ fn run_stash(
 
             timer.track("git stash show", "rtk git stash show", &raw, &filtered);
         }
-        Some("pop") | Some("apply") | Some("drop") | Some("push") => {
-            let sub = subcommand.unwrap();
+        Some(sub @ ("pop" | "apply" | "drop" | "push")) => {
             let mut cmd = git_cmd(global_args);
             cmd.args(["stash", sub]);
             for arg in args {
@@ -1454,7 +1453,7 @@ fn run_stash(
             );
 
             if !output.status.success() {
-                std::process::exit(output.status.code().unwrap_or(1));
+                std::process::exit(exit_code_from_output(&output, "git"));
             }
         }
         Some(sub) => {
@@ -1489,7 +1488,7 @@ fn run_stash(
             );
 
             if !output.status.success() {
-                std::process::exit(output.status.code().unwrap_or(1));
+                std::process::exit(exit_code_from_output(&output, "git"));
             }
         }
         None => {
@@ -1525,7 +1524,7 @@ fn run_stash(
             timer.track("git stash", "rtk git stash", &combined, &msg);
 
             if !output.status.success() {
-                std::process::exit(output.status.code().unwrap_or(1));
+                std::process::exit(exit_code_from_output(&output, "git"));
             }
         }
     }
@@ -1597,7 +1596,7 @@ fn run_worktree(args: &[String], verbose: u8, global_args: &[String]) -> Result<
             if !stderr.trim().is_empty() {
                 eprintln!("{}", stderr);
             }
-            std::process::exit(output.status.code().unwrap_or(1));
+            std::process::exit(exit_code_from_output(&output, "git"));
         }
         return Ok(());
     }
@@ -1658,13 +1657,11 @@ pub fn run_passthrough(args: &[OsString], global_args: &[String], verbose: u8) -
         .context("Failed to run git")?;
 
     let args_str = tracking::args_display(args);
-    timer.track_passthrough(
-        &format!("git {}", args_str),
-        &format!("rtk git {} (passthrough)", args_str),
-    );
+    let label = format!("git {}", args_str);
+    timer.track_passthrough(&label, &format!("rtk {} (passthrough)", label));
 
     if !status.success() {
-        std::process::exit(status.code().unwrap_or(1));
+        std::process::exit(exit_code_from_status(&status, &label));
     }
     Ok(())
 }
