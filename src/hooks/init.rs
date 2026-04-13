@@ -2728,21 +2728,44 @@ More notes
         assert_eq!(content.matches("@RTK.md").count(), 1);
     }
 
+    /// RAII guard that restores the process working directory on drop (even on panic).
+    /// Required for tests that call `set_current_dir` so parallel tests are not affected.
+    struct CwdGuard(std::path::PathBuf);
+    impl Drop for CwdGuard {
+        fn drop(&mut self) {
+            let _ = std::env::set_current_dir(&self.0);
+        }
+    }
+
     #[test]
     fn test_install_codex_instructions_creates_both_files() {
         let temp = TempDir::new().unwrap();
-        let cwd = std::env::current_dir().unwrap();
+        let _guard = CwdGuard(std::env::current_dir().unwrap());
         std::env::set_current_dir(temp.path()).unwrap();
 
+        // git hooks set GIT_DIR which makes `git rev-parse --show-toplevel`
+        // return the repo root even when cwd is a temp directory.  Clear it so
+        // git_worktree_root() falls back to current_dir() (= temp) as expected.
+        let had_git_dir = std::env::var("GIT_DIR").ok();
+        std::env::remove_var("GIT_DIR");
+        let had_git_work_tree = std::env::var("GIT_WORK_TREE").ok();
+        std::env::remove_var("GIT_WORK_TREE");
+
         let added = install_codex_instructions(false, 0).unwrap();
+
+        // Restore git env vars (best-effort — test isolation only).
+        if let Some(v) = had_git_dir {
+            std::env::set_var("GIT_DIR", v);
+        }
+        if let Some(v) = had_git_work_tree {
+            std::env::set_var("GIT_WORK_TREE", v);
+        }
 
         let agents_md = temp.path().join("AGENTS.md");
         let rtk_md = temp.path().join("RTK.md");
         assert!(added);
         assert_eq!(fs::read_to_string(&agents_md).unwrap(), "@RTK.md\n");
         assert_eq!(fs::read_to_string(&rtk_md).unwrap(), RTK_SLIM_CODEX);
-
-        std::env::set_current_dir(cwd).unwrap();
     }
 
     #[test]

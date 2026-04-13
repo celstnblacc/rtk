@@ -837,3 +837,10 @@ See upstream: https://github.com/pszymkowiak/rtk
 * **cwd-fallback (M-2):** `resolved_command` CWD fallback uses `"."` instead of empty path on `current_dir()` failure
 * **learn-unwrap (M-3):** remove `grouped.get(&base_cmd).unwrap()` panic path in `report.rs` with `let Some(...) else { continue }`
 * **exit-code-propagation (L-2):** migrate all remaining `status.code().unwrap_or(1)` calls in `gh_cmd.rs`, `gt_cmd.rs`, `git.rs`, `main.rs` to `exit_code_from_status()`
+
+## [0.34.4] (2026-04-13) — celstnblacc/rtk fork
+
+### Changed
+
+- **hook version 4:** bump `rtk-hook-version` in `hooks/claude/rtk-rewrite.sh` from 3 to 4 and align `CURRENT_HOOK_VERSION` constant in `src/hooks/hook_check.rs`
+- **token-diet integration:** `rtk-rewrite.sh` now exits early (no-op) when `$HOME/.config/token-diet/rtk-disabled` sentinel file is present — honours the token-diet stack's per-host RTK toggle
