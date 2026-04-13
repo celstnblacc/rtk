@@ -844,3 +844,13 @@ See upstream: https://github.com/pszymkowiak/rtk
 
 - **hook version 4:** bump `rtk-hook-version` in `hooks/claude/rtk-rewrite.sh` from 3 to 4 and align `CURRENT_HOOK_VERSION` constant in `src/hooks/hook_check.rs`
 - **token-diet integration:** `rtk-rewrite.sh` now exits early (no-op) when `$HOME/.config/token-diet/rtk-disabled` sentinel file is present — honours the token-diet stack's per-host RTK toggle
+
+## [0.34.5] - 2026-04-13
+
+### Fixed
+- **clippy (Rust 1.94):** resolve 7 lint warnings introduced by new clippy lints
+  - `module_inception`: `#[allow]` on `pub mod git` in `cmds/git/mod.rs`
+  - `unnecessary_map_or`: replace `.map_or(false, …)` with `.is_some_and(…)` in `rake_cmd.rs`
+  - `derivable_impls`: replace manual `impl Default for TelemetryConfig` with `#[derive(Default)]`
+  - `manual_strip`: replace `["cat ".len()..]` with `.strip_prefix("cat ")` in `registry.rs`
+  - `useless_vec`: replace `vec![…]` with array literals in 3 test sites in `permissions.rs`
