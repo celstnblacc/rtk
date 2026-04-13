@@ -524,7 +524,7 @@ mod tests {
     #[test]
     fn test_allow_list_logic_match() {
         // Simulate the allow-list gate: command IS on the allow list → Allow.
-        let allow_rules = vec!["ls".to_string(), "git status".to_string()];
+        let allow_rules = ["ls".to_string(), "git status".to_string()];
         let matched = allow_rules
             .iter()
             .any(|p| command_matches_pattern("ls -la", p));
@@ -534,7 +534,7 @@ mod tests {
     #[test]
     fn test_allow_list_logic_no_match() {
         // Command is NOT on the allow list → should become Ask (not Allow).
-        let allow_rules = vec!["git status".to_string()];
+        let allow_rules = ["git status".to_string()];
         let matched = allow_rules
             .iter()
             .any(|p| command_matches_pattern("rm -rf /tmp/foo", p));
@@ -547,7 +547,7 @@ mod tests {
     #[test]
     fn test_allow_list_wildcard() {
         // Wildcard allow rules work correctly.
-        let allow_rules = vec!["git *".to_string()];
+        let allow_rules = ["git *".to_string()];
         assert!(allow_rules
             .iter()
             .any(|p| command_matches_pattern("git log -10", p)));
