@@ -87,16 +87,10 @@ impl Default for FilterConfig {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+// M-1: telemetry disabled by default in this fork — functionality has been stripped.
+#[derive(Debug, Default, Serialize, Deserialize)]
 pub struct TelemetryConfig {
     pub enabled: bool,
-}
-
-impl Default for TelemetryConfig {
-    fn default() -> Self {
-        // M-1: disabled by default in this fork — telemetry functionality has been stripped.
-        Self { enabled: false }
-    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
