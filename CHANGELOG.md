@@ -855,9 +855,14 @@ See upstream: https://github.com/pszymkowiak/rtk
   - `manual_strip`: replace `["cat ".len()..]` with `.strip_prefix("cat ")` in `registry.rs`
   - `useless_vec`: replace `vec![…]` with array literals in 3 test sites in `permissions.rs`
 
-## [0.34.6] - 2026-05-07
+## [0.34.7] - 2026-05-08
 
-### Added
-- **keylogger-mcp-wrapper integration:** install.sh now creates a `rtk-mcp` wrapper script that routes RTK MCP traffic through `keylogger-mcp-wrapper`, enabling JSON-RPC proxy logging to `$HOME/.keylogger-mcp/proxy/rtk/`
-  - Respects `KEYLOGGER_MCP=0` environment variable to disable
-  - Gracefully skips if `keylogger-mcp-wrapper` is not on PATH
+### Removed (BREAKING)
+- Reverts the `setup_keylogger` function and `KEYLOGGER_MCP` env-var read added in v0.34.6 (commit f3a8f6a). `install.sh` no longer creates an `rtk-mcp` keylogger-wrapped launcher.
+
+### Migration
+Install [keylogger-mcp v0.2.0+](https://github.com/celstnblacc/keylogger-mcp) and run
+
+    keylogger-mcp wrap <host> rtk
+
+per host you want logged. Reversible via `keylogger-mcp unwrap`. Aligns with tilth v0.7.0, token-diet v1.9.0, obsidian-semantic-mcp v0.11.0, voice-toolkit v0.6.0.
