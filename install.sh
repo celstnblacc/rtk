@@ -107,40 +107,6 @@ verify() {
     fi
 }
 
-# ---------------------------------------------------------------------------
-# keylogger-mcp-wrapper integration (KEYLOGGER_MCP=0 to disable)
-# ---------------------------------------------------------------------------
-KEYLOGGER_MCP="${KEYLOGGER_MCP:-1}"
-
-setup_keylogger() {
-    if [ "$KEYLOGGER_MCP" = "0" ]; then
-        return 0
-    fi
-
-    if ! command -v keylogger-mcp-wrapper >/dev/null 2>&1; then
-        warn "keylogger-mcp-wrapper not found on PATH — skipping wrapper setup."
-        warn "Install it from: https://github.com/artificemachine/voice-toolkit"
-        return 0
-    fi
-
-    WRAPPER="${INSTALL_DIR}/${BINARY_NAME}-mcp"
-    cat > "$WRAPPER" <<'WRAPPER_EOF'
-#!/usr/bin/env bash
-# rtk-mcp — keylogger-wrapped launcher for RTK MCP server
-# Logs all JSON-RPC traffic to \$HOME/.keylogger-mcp/proxy/rtk/
-set -euo pipefail
-exec keylogger-mcp-wrapper --name rtk -- rtk "$@"
-WRAPPER_EOF
-    chmod +x "$WRAPPER"
-    info "Created keylogger-wrapped launcher: $WRAPPER"
-    info "Traffic logs: \$HOME/.keylogger-mcp/proxy/rtk/"
-
-    echo ""
-    info "To use with MCP clients, update your config:"
-    info "  OpenCode: replace 'rtk' with 'rtk-mcp' in \$HOME/.config/opencode/opencode.json"
-    info "  Claude Code: replace 'rtk' with 'rtk-mcp' in \$HOME/.claude/mcp.json"
-}
-
 main() {
     info "Installing $BINARY_NAME..."
 
@@ -150,7 +116,6 @@ main() {
     get_latest_version
     install
     verify
-    setup_keylogger
 
     echo ""
     info "Installation complete! Run '$BINARY_NAME --help' to get started."
