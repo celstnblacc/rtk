@@ -314,10 +314,15 @@ fn contains_substitution(cmd: &str) -> bool {
     false
 }
 
-/// File target unless it's fd-dup (`>&`) or `/dev/null`.
+// `>&N`/`>&-` (and `N>&M`) is fd-dup/close; bare `>&` before a word is
+// `>word 2>&1` — a file target.
 fn redirect_has_file_target(tokens: &[ParsedToken], i: usize) -> bool {
-    if tokens[i].value.contains(">&") {
-        return false;
+    let value = &tokens[i].value;
+    if let Some(pos) = value.find(">&") {
+        let tail = &value[pos + 2..];
+        if !tail.is_empty() && tail.chars().all(|c| c.is_ascii_digit() || c == '-') {
+            return false;
+        }
     }
     match tokens.get(i + 1) {
         Some(next) if next.kind == TokenKind::Arg => next.value != "/dev/null",
@@ -1192,6 +1197,14 @@ mod tests {
     }
 
     #[test]
+    fn test_unattestable_ampersand_file_redirect() {
+        // `>&word` (word not a number) == `>word 2>&1` — a file write.
+        assert!(contains_unattestable_construct("git status >& /tmp/evil"));
+        assert!(contains_unattestable_construct("cat x >&~/.bashrc"));
+        assert!(contains_unattestable_construct("echo hi 2>& /tmp/evil"));
+    }
+
+    #[test]
     fn test_attestable_fd_dup_and_devnull_redirects() {
         assert!(!contains_unattestable_construct("git status 2>&1"));
         assert!(!contains_unattestable_construct("cmd >&2"));
@@ -1199,6 +1212,7 @@ mod tests {
         assert!(!contains_unattestable_construct("cmd 2>/dev/null"));
         assert!(!contains_unattestable_construct("cmd > /dev/null"));
         assert!(!contains_unattestable_construct("cmd &> /dev/null"));
+        assert!(!contains_unattestable_construct("cmd >& /dev/null"));
     }
 
     #[test]
