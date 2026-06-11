@@ -866,3 +866,5 @@ Install [keylogger-mcp v0.2.0+](https://github.com/celstnblacc/keylogger-mcp) an
     keylogger-mcp wrap <host> rtk
 
 per host you want logged. Reversible via `keylogger-mcp unwrap`. Aligns with tilth v0.7.0, token-diet v1.9.0, obsidian-semantic-mcp v0.11.0, voice-toolkit v0.6.0.
+- feat(doctor): add `rtk doctor` health check command (hook, DB, PATH, config, failure rate; --json output for token-diet integration)
+- chore: add .superharness/.gitignore, GEMINI.md; propagate Strict Installation Decoupling rule to AGENTS.md and CLAUDE.md

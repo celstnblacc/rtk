@@ -16,7 +16,7 @@ This is a fork with critical fixes for git argument parsing and modern JavaScrip
 
 **Verify correct installation:**
 ```bash
-rtk --version  # Should show "rtk 0.28.2" (or newer)
+rtk --version  # Should show "rtk 0.34.3" (or newer)
 rtk gain       # Should show token savings stats (NOT "command not found")
 ```
 
@@ -167,3 +167,7 @@ When user provides a numbered plan (QW1-QW4, Phase 1-5, sprint tasks, etc.):
 3. **Never skip or reorder**: If a step is blocked, report it and ask before proceeding
 4. **Track progress**: Use task list (TaskCreate/TaskUpdate) for plans with 3+ steps
 5. **Validate assumptions**: Before starting, verify all referenced file paths exist and working directory is correct
+
+## Strict Installation Decoupling
+
+Once installed (e.g., to ~/.local/bin), the project binary must NEVER depend on the local repository path (~/DevOpsSec) for execution, configuration, or data. All paths must be relative to the installation root or use standard system config paths (~/.config).

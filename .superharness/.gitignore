@@ -1,0 +1,4 @@
+.dashboard_auth_token
+trace.jsonl
+session-progress.md
+watcher.heartbeat
