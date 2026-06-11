@@ -837,3 +837,5 @@ See upstream: https://github.com/pszymkowiak/rtk
 * **cwd-fallback (M-2):** `resolved_command` CWD fallback uses `"."` instead of empty path on `current_dir()` failure
 * **learn-unwrap (M-3):** remove `grouped.get(&base_cmd).unwrap()` panic path in `report.rs` with `let Some(...) else { continue }`
 * **exit-code-propagation (L-2):** migrate all remaining `status.code().unwrap_or(1)` calls in `gh_cmd.rs`, `gt_cmd.rs`, `git.rs`, `main.rs` to `exit_code_from_status()`
+- feat(doctor): add `rtk doctor` health check command (hook, DB, PATH, config, failure rate; --json output for token-diet integration)
+- chore: add .superharness/.gitignore, GEMINI.md; propagate Strict Installation Decoupling rule to AGENTS.md and CLAUDE.md

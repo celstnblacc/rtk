@@ -19,8 +19,8 @@ use cmds::python::{mypy_cmd, pip_cmd, pytest_cmd, ruff_cmd};
 use cmds::ruby::{rake_cmd, rspec_cmd, rubocop_cmd};
 use cmds::rust::{cargo_cmd, runner};
 use cmds::system::{
-    deps, env_cmd, find_cmd, format_cmd, grep_cmd, json_cmd, local_llm, log_cmd, ls, read, summary,
-    tree, wc_cmd,
+    deps, doctor, env_cmd, find_cmd, format_cmd, grep_cmd, json_cmd, local_llm, log_cmd, ls, read,
+    summary, tree, wc_cmd,
 };
 
 use anyhow::{Context, Result};
@@ -429,6 +429,13 @@ enum Commands {
         /// Create default config file
         #[arg(long)]
         create: bool,
+    },
+
+    /// Health check: hook status, DB, PATH, config, failure rate
+    Doctor {
+        /// Output as JSON (for token-diet integration)
+        #[arg(long)]
+        json: bool,
     },
 
     /// Vitest commands with compact output
@@ -1244,8 +1251,11 @@ fn main() -> Result<()> {
     };
 
     // Warn if installed hook is outdated/missing (1/day, non-blocking).
-    // Skip for Gain — it shows its own inline hook warning.
-    if !matches!(cli.command, Commands::Gain { .. }) {
+    // Skip for Gain (shows its own inline warning) and Doctor (reports hook status itself).
+    if !matches!(
+        cli.command,
+        Commands::Gain { .. } | Commands::Doctor { .. }
+    ) {
         hooks::hook_check::maybe_warn();
     }
 
@@ -1762,6 +1772,10 @@ fn main() -> Result<()> {
             } else {
                 core::config::show_config()?;
             }
+        }
+
+        Commands::Doctor { json } => {
+            doctor::run(json)?;
         }
 
         Commands::Vitest { command } => match command {

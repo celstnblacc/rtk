@@ -478,6 +478,35 @@ impl Tracker {
         })
     }
 
+    /// Failure rate (0.0–1.0) for commands in the last 7 days.
+    ///
+    /// Returns the fraction of parse failures relative to total commands.
+    /// Returns `Err` if there is no command history at all.
+    pub fn get_failure_rate_7d(&self) -> Result<f64> {
+        let cutoff = chrono::Utc::now()
+            .checked_sub_signed(chrono::Duration::days(7))
+            .unwrap_or(chrono::Utc::now());
+        let cutoff_str = cutoff.to_rfc3339();
+
+        let total_cmds: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM commands WHERE timestamp >= ?1",
+            rusqlite::params![cutoff_str],
+            |row| row.get(0),
+        )?;
+
+        if total_cmds == 0 {
+            return Err(anyhow::anyhow!("no command history"));
+        }
+
+        let failures: i64 = self.conn.query_row(
+            "SELECT COUNT(*) FROM parse_failures WHERE timestamp >= ?1",
+            rusqlite::params![cutoff_str],
+            |row| row.get(0),
+        )?;
+
+        Ok(failures as f64 / total_cmds as f64)
+    }
+
     /// Get overall summary statistics across all recorded commands.
     ///
     /// Returns aggregated metrics including:
