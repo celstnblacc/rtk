@@ -18,4 +18,4 @@ failures: []
 #     title: "Task title"
 #     status: "todo|in_progress|done"
 #     owner: "claude-code|codex-cli"
-#     project_path: "/Users/airm2max/DevOpsSec/rtk"
+#     project_path: "$HOME/projects/rtk"
