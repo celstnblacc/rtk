@@ -60,27 +60,6 @@ pub fn strip_ansi(text: &str) -> String {
 ///
 /// # Returns
 /// `(stdout: String, stderr: String, exit_code: i32)`
-///
-/// # Examples
-/// ```no_run
-/// use rtk::utils::execute_command;
-/// let (stdout, stderr, code) = execute_command("echo", &["test"]).unwrap();
-/// assert_eq!(code, 0);
-/// ```
-#[allow(dead_code)]
-pub fn execute_command(cmd: &str, args: &[&str]) -> Result<(String, String, i32)> {
-    let output = resolved_command(cmd)
-        .args(args)
-        .output()
-        .context(format!("Failed to execute {}", cmd))?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    let exit_code = output.status.code().unwrap_or(-1);
-
-    Ok((stdout, stderr, exit_code))
-}
-
 /// Formats a token count with K/M suffixes for readability.
 ///
 /// # Arguments
@@ -168,7 +147,7 @@ pub fn format_cpt(cpt: f64) -> String {
 pub fn join_with_overflow(items: &[String], total: usize, max: usize, label: &str) -> String {
     let mut out = items.join("\n");
     if total > max {
-        out.push_str(&format!("\n... +{} more {}", total - max, label));
+        out.push_str(&format!("\n… +{} more {}", total - max, label));
     }
     out
 }
@@ -207,20 +186,6 @@ pub fn ok_confirmation(action: &str, detail: &str) -> String {
     }
 }
 
-/// Split a shell command string into binary + arguments using POSIX word splitting.
-///
-/// Unlike `sh -c`, this does NOT interpret shell metacharacters (`;`, `&&`, `||`, `|`).
-/// Each token is passed as a literal argument to the subprocess — no shell injection possible.
-///
-/// # Errors
-/// Returns an error if the command string is empty or has unmatched quotes.
-pub fn split_command(command: &str) -> Result<Vec<String>> {
-    if command.trim().is_empty() {
-        anyhow::bail!("Empty command string");
-    }
-    shell_words::split(command).with_context(|| format!("Failed to parse command: {}", command))
-}
-
 /// Extract exit code from a process output. Returns the actual exit code, or
 /// `128 + signal` per Unix convention when terminated by a signal (no exit code
 /// available). Falls back to 1 on non-Unix platforms.
@@ -242,8 +207,9 @@ pub fn exit_code_from_output(output: &std::process::Output, label: &str) -> i32 
     }
 }
 
-/// Extract exit code from an ExitStatus. Returns the actual exit code, or
-/// `128 + signal` per Unix convention when terminated by a signal.
+/// Extract exit code from an ExitStatus (for `.status()` calls, not `.output()`).
+/// Returns the actual exit code, or `128 + signal` per Unix convention when
+/// terminated by a signal. Falls back to 1 on non-Unix platforms.
 pub fn exit_code_from_status(status: &std::process::ExitStatus, label: &str) -> i32 {
     match status.code() {
         Some(code) => code,
@@ -371,33 +337,22 @@ pub fn resolve_binary(name: &str) -> Result<PathBuf> {
 /// # Returns
 /// A `Command` configured with the resolved binary path.
 pub fn resolved_command(name: &str) -> Command {
-    let mut cmd = match resolve_binary(name) {
+    match resolve_binary(name) {
         Ok(path) => Command::new(path),
-        Err(_e) => {
+        Err(e) => {
             // On Windows, resolution failure likely means a .CMD/.BAT wrapper
             // wasn't found — always warn so users have a signal.
             // On Unix, this is less common; only log in debug builds.
-            #[cfg(target_os = "windows")]
-            eprintln!(
-                "rtk: Failed to resolve '{}' via PATH, falling back to direct exec: {}",
-                name, _e
-            );
-            #[cfg(not(target_os = "windows"))]
-            {
-                #[cfg(debug_assertions)]
+            if cfg!(any(target_os = "windows", debug_assertions)) {
                 eprintln!(
                     "rtk: Failed to resolve '{}' via PATH, falling back to direct exec: {}",
-                    name, _e
+                    name, e
                 );
             }
+
             Command::new(name)
         }
-    };
-    // fix #897 (global): prevent all subprocesses from inheriting the hook pipe's
-    // stdin. Without this, children block on EOF and leak memory. Commands that
-    // need stdin can override with .stdin(Stdio::piped()) after this call.
-    cmd.stdin(std::process::Stdio::null());
-    cmd
+    }
 }
 
 /// Check if a tool exists on PATH (PATHEXT-aware on Windows).
@@ -407,24 +362,40 @@ pub fn tool_exists(name: &str) -> bool {
     which::which(name).is_ok()
 }
 
-/// Return the git worktree root for the current directory, or fall back to CWD.
-///
-/// Uses `git rev-parse --show-toplevel` which returns the worktree root (not the
-/// main repo root), making this safe for use inside git worktrees.
-///
-/// Used by `rtk init --codex` to anchor RTK.md and AGENTS.md to the repo root
-/// rather than the process CWD — fixes #892.
-pub fn git_worktree_root() -> std::path::PathBuf {
-    std::process::Command::new("git")
-        .args(["rev-parse", "--show-toplevel"])
-        .stdin(std::process::Stdio::null())
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .map(|s| std::path::PathBuf::from(s.trim()))
-        // M-2: unwrap_or_default() returns an empty path on failure; use "." instead.
-        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
+/// Extract short name from AWS ARN.
+/// Example: `arn:aws:ecs:region:acct:service/cluster/name` -> `name`
+/// For simple ARNs like `arn:aws:iam::123:user/alice`, returns `alice`.
+pub fn shorten_arn(arn: &str) -> &str {
+    // ARNs use "/" or ":" as separators. Try "/" first (service/cluster/name pattern),
+    // then fall back to ":" for Lambda/IAM ARNs.
+    let slash_result = arn.rsplit('/').next().unwrap_or(arn);
+    // If rsplit('/') returned the whole string (no '/' found), try ':'
+    if slash_result == arn {
+        arn.rsplit(':').next().unwrap_or(arn)
+    } else {
+        slash_result
+    }
+}
+
+/// Convert bytes to human-readable format (KB, MB, GB, TB).
+/// Used for S3 object sizes.
+pub fn human_bytes(bytes: u64) -> String {
+    const KB: u64 = 1024;
+    const MB: u64 = KB * 1024;
+    const GB: u64 = MB * 1024;
+    const TB: u64 = GB * 1024;
+
+    if bytes >= TB {
+        format!("{:.1} TB", bytes as f64 / TB as f64)
+    } else if bytes >= GB {
+        format!("{:.1} GB", bytes as f64 / GB as f64)
+    } else if bytes >= MB {
+        format!("{:.1} MB", bytes as f64 / MB as f64)
+    } else if bytes >= KB {
+        format!("{:.1} KB", bytes as f64 / KB as f64)
+    } else {
+        format!("{} B", bytes)
+    }
 }
 
 #[cfg(test)]
@@ -478,21 +449,6 @@ mod tests {
     fn test_strip_ansi_complex() {
         let input = "\x1b[32mGreen\x1b[0m normal \x1b[31mRed\x1b[0m";
         assert_eq!(strip_ansi(input), "Green normal Red");
-    }
-
-    #[test]
-    fn test_execute_command_success() {
-        let result = execute_command("echo", &["test"]);
-        assert!(result.is_ok());
-        let (stdout, _, code) = result.unwrap();
-        assert_eq!(code, 0);
-        assert!(stdout.contains("test"));
-    }
-
-    #[test]
-    fn test_execute_command_failure() {
-        let result = execute_command("nonexistent_command_xyz_12345", &[]);
-        assert!(result.is_err());
     }
 
     #[test]
@@ -821,5 +777,83 @@ mod tests {
                 "which_in should find .cmd wrapper on Windows"
             );
         }
+    }
+
+    // ===== AWS helper function tests =====
+
+    #[test]
+    fn test_shorten_arn_ecs_service() {
+        assert_eq!(
+            shorten_arn("arn:aws:ecs:us-east-1:123:service/cluster/api-service"),
+            "api-service"
+        );
+    }
+
+    #[test]
+    fn test_shorten_arn_iam_user() {
+        assert_eq!(shorten_arn("arn:aws:iam::123456789012:user/alice"), "alice");
+    }
+
+    #[test]
+    fn test_shorten_arn_lambda() {
+        assert_eq!(
+            shorten_arn("arn:aws:lambda:us-west-2:123:function:my-function"),
+            "my-function"
+        );
+    }
+
+    #[test]
+    fn test_shorten_arn_fallback() {
+        // Non-ARN string - return as-is
+        assert_eq!(shorten_arn("simple-name"), "simple-name");
+    }
+
+    #[test]
+    fn test_human_bytes_bytes() {
+        assert_eq!(human_bytes(0), "0 B");
+        assert_eq!(human_bytes(512), "512 B");
+        assert_eq!(human_bytes(1023), "1023 B");
+    }
+
+    #[test]
+    fn test_human_bytes_kb() {
+        assert_eq!(human_bytes(1024), "1.0 KB");
+        assert_eq!(human_bytes(2048), "2.0 KB");
+        assert_eq!(human_bytes(1536), "1.5 KB");
+    }
+
+    #[test]
+    fn test_human_bytes_mb() {
+        assert_eq!(human_bytes(1_048_576), "1.0 MB");
+        assert_eq!(human_bytes(5_242_880), "5.0 MB");
+    }
+
+    #[test]
+    fn test_human_bytes_gb() {
+        assert_eq!(human_bytes(1_073_741_824), "1.0 GB");
+        assert_eq!(human_bytes(2_147_483_648), "2.0 GB");
+    }
+
+    #[test]
+    fn test_human_bytes_tb() {
+        assert_eq!(human_bytes(1_099_511_627_776), "1.0 TB");
+    }
+
+    #[test]
+    fn test_count_tokens_basic() {
+        assert_eq!(count_tokens("hello world"), 2);
+        assert_eq!(count_tokens("one two three four"), 4);
+    }
+
+    #[test]
+    fn test_count_tokens_empty() {
+        assert_eq!(count_tokens(""), 0);
+        assert_eq!(count_tokens("   "), 0);
+    }
+
+    #[test]
+    fn test_count_tokens_multiple_spaces() {
+        assert_eq!(count_tokens("hello    world"), 2);
+        assert_eq!(count_tokens("  hello   world  "), 2);
     }
 }

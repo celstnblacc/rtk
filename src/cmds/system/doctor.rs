@@ -260,7 +260,7 @@ mod tests {
 
     #[test]
     fn overall_fail_when_any_fail() {
-        let checks = vec![
+        let checks = [
             DoctorCheck {
                 name: "a",
                 status: CheckStatus::Pass,
@@ -284,7 +284,7 @@ mod tests {
 
     #[test]
     fn overall_warn_when_no_fail_but_warn() {
-        let checks = vec![
+        let checks = [
             DoctorCheck {
                 name: "a",
                 status: CheckStatus::Pass,
@@ -308,7 +308,7 @@ mod tests {
 
     #[test]
     fn overall_pass_when_all_pass() {
-        let checks = vec![DoctorCheck {
+        let checks = [DoctorCheck {
             name: "a",
             status: CheckStatus::Pass,
             detail: String::new(),

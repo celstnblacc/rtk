@@ -83,11 +83,7 @@ pub fn write_rules_file(rules: &[CorrectionRule], path: &str) -> Result<()> {
     base_commands.sort();
 
     for base_cmd in base_commands {
-        // M-3: base_cmd is derived from grouped.keys() so it is always present;
-        // skip defensively rather than panic on a logic error.
-        let Some(rules_for_cmd) = grouped.get(&base_cmd) else {
-            continue;
-        };
+        let rules_for_cmd = grouped.get(&base_cmd).unwrap();
 
         // Capitalize first letter for section header
         let section_header = capitalize_first(&base_cmd);

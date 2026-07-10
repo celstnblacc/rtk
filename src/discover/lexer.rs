@@ -379,7 +379,6 @@ pub fn split_for_permissions(cmd: &str) -> Vec<&str> {
 /// (used by command rewriting — only the left side of a pipe gets rewritten).
 /// When false, splits through pipes too (used by permission checking —
 /// every segment must be validated).
-#[allow(dead_code)] // lexer primitive, no call site yet in this trimmed-down security-only port
 pub fn split_on_operators(cmd: &str, stop_at_pipe: bool) -> Vec<&str> {
     let trimmed = cmd.trim();
     if trimmed.is_empty() {
@@ -433,7 +432,6 @@ pub fn strip_quotes(s: &str) -> String {
     s.to_string()
 }
 
-#[allow(dead_code)] // lexer primitive, no call site yet in this trimmed-down security-only port
 pub fn shell_split(input: &str) -> Vec<String> {
     let mut tokens = Vec::new();
     let mut current = String::new();
@@ -1190,8 +1188,10 @@ mod tests {
     #[test]
     fn test_unattestable_file_redirects() {
         assert!(contains_unattestable_construct("git log > /tmp/x"));
+        // nosemgrep: sensitive-path-reference -- test fixture
         assert!(contains_unattestable_construct("echo evil >> ~/.bashrc"));
         assert!(contains_unattestable_construct("cmd &> /tmp/x"));
+        // nosemgrep: sensitive-path-reference -- test fixture
         assert!(contains_unattestable_construct("cat < /etc/passwd"));
         assert!(contains_unattestable_construct("cat << EOF"));
     }
@@ -1200,6 +1200,7 @@ mod tests {
     fn test_unattestable_ampersand_file_redirect() {
         // `>&word` (word not a number) == `>word 2>&1` — a file write.
         assert!(contains_unattestable_construct("git status >& /tmp/evil"));
+        // nosemgrep: sensitive-path-reference -- test fixture
         assert!(contains_unattestable_construct("cat x >&~/.bashrc"));
         assert!(contains_unattestable_construct("echo hi 2>& /tmp/evil"));
     }

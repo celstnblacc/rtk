@@ -1,5 +1,6 @@
 //! Filters find results by grouping files by directory.
 
+use crate::core::guard::never_worse;
 use crate::core::tracking;
 use anyhow::{Context, Result};
 use ignore::WalkBuilder;
@@ -210,9 +211,13 @@ pub fn run(
 
     let want_dirs = file_type == "d";
 
+    // When the pattern targets dotfiles (e.g. -name ".claude.json"), we must walk hidden
+    // entries; otherwise skip them to keep results tidy (#1101).
+    let search_hidden = effective_pattern.starts_with('.');
+
     let mut builder = WalkBuilder::new(path);
     builder
-        .hidden(true) // skip hidden files/dirs
+        .hidden(!search_hidden) // skip hidden files/dirs unless pattern targets dotfiles
         .git_ignore(true) // respect .gitignore
         .git_global(true)
         .git_exclude(true);
@@ -274,13 +279,11 @@ pub fn run(
     let raw_output = files.join("\n");
 
     if files.is_empty() {
-        let msg = format!("0 for '{}'", effective_pattern);
-        println!("{}", msg);
         timer.track(
             &format!("find {} -name '{}'", path, effective_pattern),
             "rtk find",
             &raw_output,
-            &msg,
+            "",
         );
         return Ok(());
     }
@@ -307,13 +310,14 @@ pub fn run(
     let dirs_count = dirs.len();
     let total_files = files.len();
 
-    println!("{}F {}D:", total_files, dirs_count);
-    println!();
+    let mut body = String::new();
+    body.push_str(&format!("{}F {}D:\n", total_files, dirs_count));
+    body.push('\n');
 
     // Display with proper --max limiting (count individual files)
-    let mut shown = 0;
+    let mut displayed = 0;
     for dir in &dirs {
-        if shown >= max_results {
+        if displayed >= max_results {
             break;
         }
 
@@ -324,10 +328,10 @@ pub fn run(
             dir.clone()
         };
 
-        let remaining_budget = max_results - shown;
+        let remaining_budget = max_results - displayed;
         if files_in_dir.len() <= remaining_budget {
-            println!("{}/ {}", dir_display, files_in_dir.join(" "));
-            shown += files_in_dir.len();
+            body.push_str(&format!("{}/ {}\n", dir_display, files_in_dir.join(" ")));
+            displayed += files_in_dir.len();
         } else {
             // Partial display: show only what fits in budget
             let partial: Vec<_> = files_in_dir
@@ -335,14 +339,14 @@ pub fn run(
                 .take(remaining_budget)
                 .cloned()
                 .collect();
-            println!("{}/ {}", dir_display, partial.join(" "));
-            shown += partial.len();
+            body.push_str(&format!("{}/ {}\n", dir_display, partial.join(" ")));
+            displayed += partial.len();
             break;
         }
     }
 
-    if shown < total_files {
-        println!("+{} more", total_files - shown);
+    if displayed < total_files {
+        body.push_str(&format!("+{} more\n", total_files - displayed));
     }
 
     // Extension summary
@@ -355,9 +359,8 @@ pub fn run(
         *by_ext.entry(ext).or_default() += 1;
     }
 
-    let mut ext_line = String::new();
     if by_ext.len() > 1 {
-        println!();
+        body.push('\n');
         let mut exts: Vec<_> = by_ext.iter().collect();
         exts.sort_by(|a, b| b.1.cmp(a.1));
         let ext_str: Vec<String> = exts
@@ -365,16 +368,17 @@ pub fn run(
             .take(5)
             .map(|(e, c)| format!(".{}({})", e, c))
             .collect();
-        ext_line = format!("ext: {}", ext_str.join(" "));
-        println!("{}", ext_line);
+        let ext_line = format!("ext: {}", ext_str.join(" "));
+        body.push_str(&format!("{}\n", ext_line));
     }
 
-    let rtk_output = format!("{}F {}D + {}", total_files, dirs_count, ext_line);
+    let shown = never_worse(&raw_output, &body);
+    print!("{}", shown);
     timer.track(
         &format!("find {} -name '{}'", path, effective_pattern),
         "rtk find",
         &raw_output,
-        &rtk_output,
+        shown,
     );
 
     Ok(())
@@ -557,6 +561,22 @@ mod tests {
     fn run_from_args_iname_case_insensitive() {
         // -iname should match case-insensitively
         let result = run_from_args(&args(&[".", "-iname", "cargo.toml"]), 0);
+        assert!(result.is_ok());
+    }
+
+    // --- #1101: dotfile pattern should not skip hidden files ---
+
+    #[test]
+    fn find_dotfile_pattern_includes_hidden() {
+        // .gitignore exists at the repo root — must be found when using a dotfile pattern
+        let result = run(".gitignore", ".", 50, Some(1), "f", false, 0);
+        assert!(result.is_ok(), "run with dotfile pattern should not error");
+    }
+
+    #[test]
+    fn find_regular_pattern_skips_hidden() {
+        // Non-dot pattern should not error (hidden dirs remain skipped)
+        let result = run("*.rs", "src", 5, None, "f", false, 0);
         assert!(result.is_ok());
     }
 
