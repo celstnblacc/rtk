@@ -16,7 +16,7 @@ This is a fork with critical fixes for git argument parsing and modern JavaScrip
 
 **Verify correct installation:**
 ```bash
-rtk --version  # Should show "rtk 0.34.3" (or newer)
+rtk --version  # Should show "rtk 0.28.2" (or newer)
 rtk gain       # Should show token savings stats (NOT "command not found")
 ```
 
@@ -70,10 +70,12 @@ cargo generate-rpm            # RPM package (needs cargo-generate-rpm, after rel
 rtk uses a **command proxy architecture**: `main.rs` routes CLI commands via a Clap `Commands` enum to specialized filter modules in `src/cmds/*/`, each of which executes the underlying command and compresses its output. Token savings are tracked in SQLite via `src/core/tracking.rs`.
 
 For the full architecture, component details, and module development patterns, see:
-- [ARCHITECTURE.md](ARCHITECTURE.md) — System design, module organization, filtering strategies, error handling
-- [docs/TECHNICAL.md](docs/TECHNICAL.md) — End-to-end flow, folder map, hook system, filter pipeline
+- [ARCHITECTURE.md](docs/contributing/ARCHITECTURE.md) — System design, module organization, filtering strategies, error handling
+- [docs/contributing/TECHNICAL.md](docs/contributing/TECHNICAL.md) — End-to-end flow, folder map, hook system, filter pipeline
 
 Module responsibilities are documented in each folder's `README.md` and each file's `//!` doc header. Browse `src/cmds/*/` to discover available filters.
+
+Supported ecosystems: git/gh/gt, cargo, go/golangci-lint, npm/pnpm/npx, ruff/pytest/pip/mypy, rspec/rubocop/rake, dotnet, playwright/vitest/jest, docker/kubectl/aws.
 
 ### Proxy Mode
 
@@ -167,7 +169,3 @@ When user provides a numbered plan (QW1-QW4, Phase 1-5, sprint tasks, etc.):
 3. **Never skip or reorder**: If a step is blocked, report it and ask before proceeding
 4. **Track progress**: Use task list (TaskCreate/TaskUpdate) for plans with 3+ steps
 5. **Validate assumptions**: Before starting, verify all referenced file paths exist and working directory is correct
-
-## Strict Installation Decoupling
-
-Once installed (e.g., to ~/.local/bin), the project binary must NEVER depend on the local repository path for execution, configuration, or data. All paths must be relative to the installation root or use standard system config paths (~/.config).

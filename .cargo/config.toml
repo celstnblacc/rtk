@@ -1,0 +1,38 @@
+[env]
+# Several tests in src/hooks/init.rs mutate the process-wide CWD via
+# std::env::set_current_dir() instead of using an isolated per-test
+# directory handle. Under the default parallel test runner this races
+# with any other test that shells out to `git` relying on process CWD
+# (e.g. cmds::git::git's *_propagates_failure tests), producing
+# nondeterministic failures and, in the worst case, mutating this
+# checkout's real .git config as a side effect.
+#
+# Force single-threaded test execution until those tests are made
+# parallel-safe (tracked upstream). Verified: full suite passes clean
+# at --test-threads=1, fails intermittently at the default thread count.
+RUST_TEST_THREADS = "1"
+
+# Integration tests (tests/guard_integration_test.rs) create throwaway
+# `git init` repos and run real `git commit` against them, assuming a
+# vanilla git environment. On a machine with a global core.hookspath
+# (pre-commit/pre-push guards installed for all repos), those throwaway
+# commits trigger the real global hooks too -- e.g. a "no direct commits
+# to main" guard fails the test's `git commit -q --allow-empty -m init`
+# setup step, which has nothing to do with this project. Point git at an
+# empty global config for the duration of the test run so these fixtures
+# get the vanilla environment they're written to assume.
+GIT_CONFIG_GLOBAL = "/dev/null"
+
+[target.'cfg(all())']
+# Root cause of the two entries above, made airtight: when `cargo test` runs
+# from INSIDE a git hook (e.g. this repo's own pre-commit hook running
+# `cargo test`), git has already set GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE
+# in the hook's environment, pointing at the outer repo being committed.
+# Test code that shells out to `git -C <tempdir>` or
+# `Command::new("git").current_dir(tempdir)` inherits those env vars, and
+# git's explicit GIT_DIR override takes precedence over -C / current_dir(),
+# silently redirecting the "isolated" git operation onto the OUTER repo's
+# real index/config/refs instead of the tempdir fixture. `[env]` above can
+# only set variables, not unset inherited ones, so strip them at the point
+# the compiled test binary is actually invoked.
+runner = "env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_PREFIX --"

@@ -1,3 +1,5 @@
+use super::constants::{CLAUDE_DIR, CURSOR_DIR, GEMINI_DIR, SETTINGS_JSON, SETTINGS_LOCAL_JSON};
+use crate::core::stream::exec_capture;
 use crate::discover::lexer::split_for_permissions;
 use serde_json::Value;
 use std::path::PathBuf;
@@ -21,7 +23,23 @@ pub enum PermissionVerdict {
 /// Returns `Default` when no rules match — callers should treat this as ask
 /// to match Claude Code's least-privilege default.
 pub fn check_command(cmd: &str) -> PermissionVerdict {
-    let (deny_rules, ask_rules, allow_rules) = load_permission_rules();
+    check_command_for(cmd, Host::Claude)
+}
+
+/// The agent host whose own permission settings should be consulted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Host {
+    Claude,
+    Cursor,
+    Gemini,
+}
+
+pub fn check_command_for(cmd: &str, host: Host) -> PermissionVerdict {
+    let (deny_rules, ask_rules, allow_rules) = match host {
+        Host::Claude => load_permission_rules(),
+        Host::Cursor => load_cursor_rules(),
+        Host::Gemini => load_gemini_rules(),
+    };
     check_command_with_rules(cmd, &deny_rules, &ask_rules, &allow_rules)
 }
 
@@ -115,6 +133,10 @@ fn load_permission_rules() -> (Vec<String>, Vec<String>, Vec<String>) {
             continue;
         };
         let Ok(json) = serde_json::from_str::<Value>(&content) else {
+            eprintln!(
+                "[rtk] warning: failed to parse permissions from {}",
+                path.display()
+            );
             continue;
         };
         let Some(permissions) = json.get("permissions") else {
@@ -150,15 +172,103 @@ fn get_settings_paths() -> Vec<PathBuf> {
     let mut paths = Vec::new();
 
     if let Some(root) = find_project_root() {
-        paths.push(root.join(".claude").join("settings.json"));
-        paths.push(root.join(".claude").join("settings.local.json"));
+        paths.push(root.join(CLAUDE_DIR).join(SETTINGS_JSON));
+        paths.push(root.join(CLAUDE_DIR).join(SETTINGS_LOCAL_JSON));
     }
     if let Some(home) = dirs::home_dir() {
-        paths.push(home.join(".claude").join("settings.json"));
-        paths.push(home.join(".claude").join("settings.local.json"));
+        paths.push(home.join(CLAUDE_DIR).join(SETTINGS_JSON));
+        paths.push(home.join(CLAUDE_DIR).join(SETTINGS_LOCAL_JSON));
     }
 
     paths
+}
+
+fn read_json(path: &std::path::Path) -> Option<Value> {
+    let content = std::fs::read_to_string(path).ok()?;
+    match serde_json::from_str::<Value>(&content) {
+        Ok(v) => Some(v),
+        Err(_) => {
+            eprintln!(
+                "[rtk] warning: failed to parse permissions from {}",
+                path.display()
+            );
+            None
+        }
+    }
+}
+
+fn append_wrapped_rules(rules_value: Option<&Value>, prefixes: &[&str], target: &mut Vec<String>) {
+    let Some(arr) = rules_value.and_then(|v| v.as_array()) else {
+        return;
+    };
+    for rule in arr.iter().filter_map(|r| r.as_str()) {
+        for pre in prefixes {
+            let bare = &pre[..pre.len() - 1];
+            if rule == bare {
+                target.push("*".to_string());
+                break;
+            }
+            if let Some(inner) = rule.strip_prefix(pre).and_then(|s| s.strip_suffix(')')) {
+                target.push(inner.to_string());
+                break;
+            }
+        }
+    }
+}
+
+// Global config only. RTK auto-allows only the globally-trusted subset; anything
+// else defers to the host, which applies its own project config and folder-trust.
+// This keeps RTK's allow set a subset of the host's — never more permissive.
+fn global_config(dir: &str, file: &str) -> Option<Value> {
+    read_json(&dirs::home_dir()?.join(dir).join(file))
+}
+
+fn load_cursor_rules() -> (Vec<String>, Vec<String>, Vec<String>) {
+    let mut deny = Vec::new();
+    let mut allow = Vec::new();
+    if let Some(perms) = global_config(CURSOR_DIR, "cli-config.json")
+        .as_ref()
+        .and_then(|j| j.get("permissions"))
+    {
+        append_wrapped_rules(perms.get("deny"), &["Shell("], &mut deny);
+        append_wrapped_rules(perms.get("allow"), &["Shell("], &mut allow);
+    }
+    (deny, Vec::new(), allow)
+}
+
+// Gemini honors project `.gemini/settings.json` when the folder is trusted.
+// folderTrust is off by default (folder trusted); when on, a folder is trusted
+// only via GEMINI_CLI_TRUST_WORKSPACE here (dialog-only trust is treated as
+// untrusted → global, which is safe: never more permissive than the host).
+fn gemini_settings() -> Option<Value> {
+    let global = global_config(GEMINI_DIR, SETTINGS_JSON);
+    let trusted = std::env::var("GEMINI_CLI_TRUST_WORKSPACE").as_deref() == Ok("true")
+        || !global
+            .as_ref()
+            .and_then(|j| {
+                j.pointer("/security/folderTrust/enabled")
+                    .and_then(Value::as_bool)
+            })
+            .unwrap_or(false);
+    if trusted {
+        if let Some(root) = find_project_root() {
+            if let Some(v) = read_json(&root.join(GEMINI_DIR).join(SETTINGS_JSON)) {
+                return Some(v);
+            }
+        }
+    }
+    global
+}
+
+fn load_gemini_rules() -> (Vec<String>, Vec<String>, Vec<String>) {
+    let mut ask = Vec::new();
+    let mut allow = Vec::new();
+    let shells = ["run_shell_command(", "ShellTool("];
+    if let Some(tools) = gemini_settings().as_ref().and_then(|j| j.get("tools")) {
+        append_wrapped_rules(tools.get("allowed"), &shells, &mut allow);
+        append_wrapped_rules(tools.get("confirmationRequired"), &shells, &mut ask);
+    }
+    (Vec::new(), ask, allow)
 }
 
 /// Locate the project root by walking up from CWD looking for `.claude/`.
@@ -168,7 +278,7 @@ fn find_project_root() -> Option<PathBuf> {
     // Fast path: walk up CWD looking for .claude/ — no subprocess needed.
     let mut dir = std::env::current_dir().ok()?;
     loop {
-        if dir.join(".claude").exists() {
+        if dir.join(CLAUDE_DIR).exists() {
             return Some(dir);
         }
         if !dir.pop() {
@@ -177,15 +287,12 @@ fn find_project_root() -> Option<PathBuf> {
     }
 
     // Fallback: git (spawns a subprocess, slower but handles monorepo layouts).
-    let output = std::process::Command::new("git")
-        .args(["rev-parse", "--show-toplevel"])
-        .stdin(std::process::Stdio::null())
-        .output()
-        .ok()?;
+    let mut cmd = std::process::Command::new("git");
+    cmd.args(["rev-parse", "--show-toplevel"]);
+    let result = exec_capture(&mut cmd).ok()?;
 
-    if output.status.success() {
-        let path = String::from_utf8(output.stdout).ok()?;
-        return Some(PathBuf::from(path.trim()));
+    if result.success() {
+        return Some(PathBuf::from(result.stdout.trim()));
     }
 
     None
@@ -272,10 +379,20 @@ fn glob_matches(cmd: &str, pattern: &str) -> bool {
                 return false;
             }
         } else {
-            // Middle segment: find next occurrence
-            match cmd[search_from..].find(*part) {
-                Some(pos) => search_from += pos + part.len(),
-                None => return false,
+            // Middle segment: find next occurrence.
+            // Also accept end-of-string when the segment ends with whitespace — this
+            // handles commands that terminate at the middle token without trailing args,
+            // e.g. "git -C * diff:*" should match bare "git -C /path diff" (#1105).
+            let remaining = &cmd[search_from..];
+            if let Some(pos) = remaining.find(*part) {
+                search_from += pos + part.len();
+            } else {
+                let trimmed = part.trim_end();
+                if !trimmed.is_empty() && remaining.ends_with(trimmed) {
+                    search_from += remaining.len();
+                } else {
+                    return false;
+                }
             }
         }
     }
@@ -283,9 +400,6 @@ fn glob_matches(cmd: &str, pattern: &str) -> bool {
     true
 }
 
-/// Split a compound shell command into individual segments.
-///
-/// Splits on `&&`, `||`, `|`, and `;`. Not a full shell parser — handles common cases.
 fn split_compound_command(cmd: &str) -> Vec<&str> {
     split_for_permissions(cmd)
 }
@@ -405,6 +519,25 @@ mod tests {
     }
 
     #[test]
+    fn test_quoted_operators_not_split() {
+        // "&&" inside quotes must NOT cause a split — old naive splitter got this wrong
+        let deny = vec!["git push --force".to_string()];
+        assert_eq!(
+            check_command_with_rules(r#"echo "git push --force && danger""#, &deny, &[], &[]),
+            PermissionVerdict::Default
+        );
+    }
+
+    #[test]
+    fn test_pipe_segments_checked() {
+        let deny = vec!["rm -rf".to_string()];
+        assert_eq!(
+            check_command_with_rules("cat file | rm -rf /", &deny, &[], &[]),
+            PermissionVerdict::Deny
+        );
+    }
+
+    #[test]
     fn test_ask_verdict() {
         let ask = vec!["git push".to_string()];
         assert_eq!(
@@ -452,6 +585,26 @@ mod tests {
     #[test]
     fn test_middle_wildcard_no_match() {
         assert!(!command_matches_pattern("git push develop", "git * main"));
+    }
+
+    // Bug 3: middle wildcard at end-of-command (no trailing args) — #1105
+    #[test]
+    fn test_middle_wildcard_at_end_of_command() {
+        // "git -C * diff:*" should match bare "git -C /path diff" (no trailing flags)
+        assert!(command_matches_pattern(
+            "git -C /path diff",
+            "git -C * diff:*"
+        ));
+        // Must still match when there ARE trailing args
+        assert!(command_matches_pattern(
+            "git -C /path diff --stat",
+            "git -C * diff:*"
+        ));
+        // Must NOT match a different subcommand
+        assert!(!command_matches_pattern(
+            "git -C /path status",
+            "git -C * diff:*"
+        ));
     }
 
     // Bug 3: multiple wildcards
@@ -740,6 +893,7 @@ mod tests {
     fn test_file_redirect_never_auto_allowed() {
         let allow = vec!["git *".to_string()];
         assert_eq!(
+            // nosemgrep: sensitive-path-reference -- test fixture
             check_command_with_rules("git log > ~/.bashrc", &[], &[], &allow),
             PermissionVerdict::Ask
         );
@@ -792,6 +946,52 @@ mod tests {
         assert_eq!(
             check_command_with_rules("git push --force 2>&1", &deny, &[], &allow),
             PermissionVerdict::Deny
+        );
+    }
+
+    // --- Per-host rule extraction ---
+
+    #[test]
+    fn test_wrapped_rules_cursor_shell_only() {
+        let v = serde_json::json!([
+            "Shell(git)",
+            "Shell(curl:*)",
+            "Read(src/**)",
+            "Shell(npm test)"
+        ]);
+        let mut out = Vec::new();
+        append_wrapped_rules(Some(&v), &["Shell("], &mut out);
+        assert_eq!(out, vec!["git", "curl:*", "npm test"]);
+    }
+
+    #[test]
+    fn test_wrapped_rules_gemini_shell_variants() {
+        let v = serde_json::json!([
+            "run_shell_command(git)",
+            "ShellTool(npm test)",
+            "read_file",
+            "run_shell_command"
+        ]);
+        let mut out = Vec::new();
+        append_wrapped_rules(Some(&v), &["run_shell_command(", "ShellTool("], &mut out);
+        assert_eq!(out, vec!["git", "npm test", "*"]);
+    }
+
+    #[test]
+    fn test_wrapped_rules_extracted_patterns_match() {
+        let mut allow = Vec::new();
+        append_wrapped_rules(
+            Some(&serde_json::json!(["Shell(git)"])),
+            &["Shell("],
+            &mut allow,
+        );
+        assert_eq!(
+            check_command_with_rules("git status", &[], &[], &allow),
+            PermissionVerdict::Allow
+        );
+        assert_eq!(
+            check_command_with_rules("rm -rf /", &[], &[], &allow),
+            PermissionVerdict::Default
         );
     }
 }

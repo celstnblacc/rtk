@@ -1,4 +1,12 @@
 //! Filters grep output by grouping matches by file.
+//!
+//! Superseded by `cmds::system::search` (upstream v0.43.0's unified grep/rg
+//! engine, wired into `main.rs`'s `Commands::Grep` dispatch) but not yet
+//! removed from the upstream tree as of this tag -- pre-existing dead code,
+//! unrelated to this fork's sync. `#![allow(dead_code)]` unblocks this
+//! crate's `[lints] warnings = "deny"` gate rather than deleting a file
+//! this fork doesn't own the removal decision for.
+#![allow(dead_code)]
 
 use crate::core::config;
 use crate::core::tracking;

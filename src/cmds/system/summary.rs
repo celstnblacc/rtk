@@ -1,49 +1,43 @@
 //! Runs a command and produces a heuristic summary of its output.
 
+use crate::core::guard::never_worse;
+use crate::core::stream::exec_capture;
 use crate::core::tracking;
-use crate::core::utils::{exit_code_from_output, split_command, truncate};
+use crate::core::truncate::CAP_WARNINGS;
+use crate::core::utils::truncate;
 use anyhow::{Context, Result};
 use regex::Regex;
-use std::process::{Command, Stdio};
+use std::process::Command;
+
+const MAX_SUMMARY_LIST: usize = CAP_WARNINGS;
+const MAX_SUMMARY_KEYS: usize = CAP_WARNINGS;
 
 /// Run a command and provide a heuristic summary
-pub fn run(command: &str, verbose: u8) -> Result<()> {
+pub fn run(command: &str, verbose: u8) -> Result<i32> {
     let timer = tracking::TimedExecution::start();
 
     if verbose > 0 {
         eprintln!("Running and summarizing: {}", command);
     }
 
-    let output = if cfg!(target_os = "windows") {
-        Command::new("cmd")
-            .args(["/C", command])
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .output()
-            .context("Failed to execute command")?
+    let mut cmd = if cfg!(target_os = "windows") {
+        let mut c = Command::new("cmd");
+        c.args(["/C", command]);
+        c
     } else {
-        let parts = split_command(command)
-            .with_context(|| format!("Failed to parse command: {}", command))?;
-        Command::new(&parts[0])
-            .args(&parts[1..])
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .output()
-            .context("Failed to execute command")?
+        let mut c = Command::new("sh");
+        c.args(["-c", command]);
+        c
     };
+    let result = exec_capture(&mut cmd).context("Failed to execute command")?;
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let raw = format!("{}\n{}", stdout, stderr);
+    let raw = format!("{}\n{}", result.stdout, result.stderr);
 
-    let exit_code = exit_code_from_output(&output, "summary");
-    let summary = summarize_output(&raw, command, output.status.success());
-    println!("{}", summary);
-    timer.track(command, "rtk summary", &raw, &summary);
-    if exit_code != 0 {
-        std::process::exit(exit_code);
-    }
-    Ok(())
+    let summary = summarize_output(&raw, command, result.success());
+    let shown = never_worse(&raw, &summary);
+    println!("{}", shown);
+    timer.track(command, "rtk summary", &raw, shown);
+    Ok(result.exit_code)
 }
 
 fn summarize_output(output: &str, command: &str, success: bool) -> String {
@@ -241,11 +235,11 @@ fn summarize_list(output: &str, result: &mut Vec<String>) {
     let lines: Vec<&str> = output.lines().filter(|l| !l.trim().is_empty()).collect();
     result.push(format!("List ({} items):", lines.len()));
 
-    for line in lines.iter().take(10) {
+    for line in lines.iter().take(MAX_SUMMARY_LIST) {
         result.push(format!("   • {}", truncate(line, 70)));
     }
-    if lines.len() > 10 {
-        result.push(format!("   ... +{} more", lines.len() - 10));
+    if lines.len() > MAX_SUMMARY_LIST {
+        result.push(format!("   ... +{} more", lines.len() - MAX_SUMMARY_LIST));
     }
 }
 
@@ -260,11 +254,11 @@ fn summarize_json(output: &str, result: &mut Vec<String>) {
             }
             serde_json::Value::Object(obj) => {
                 result.push(format!("   Object with {} keys:", obj.len()));
-                for key in obj.keys().take(10) {
+                for key in obj.keys().take(MAX_SUMMARY_KEYS) {
                     result.push(format!("   • {}", key));
                 }
-                if obj.len() > 10 {
-                    result.push(format!("   ... +{} more keys", obj.len() - 10));
+                if obj.len() > MAX_SUMMARY_KEYS {
+                    result.push(format!("   ... +{} more keys", obj.len() - MAX_SUMMARY_KEYS));
                 }
             }
             _ => {
@@ -299,61 +293,9 @@ fn summarize_generic(output: &str, result: &mut Vec<String>) {
     }
 }
 
-lazy_static::lazy_static! {
-    // H-1: Pre-compiled regexes — never recompile on each call to extract_number.
-    // The `after` argument is always one of these four fixed strings.
-    static ref RE_PASSED:  Regex = Regex::new(r"(\d+)\s*passed").unwrap();
-    static ref RE_FAILED:  Regex = Regex::new(r"(\d+)\s*failed").unwrap();
-    static ref RE_SKIPPED: Regex = Regex::new(r"(\d+)\s*skipped").unwrap();
-    static ref RE_IGNORED: Regex = Regex::new(r"(\d+)\s*ignored").unwrap();
-}
-
 fn extract_number(text: &str, after: &str) -> Option<usize> {
-    let re = match after {
-        "passed" => &*RE_PASSED,
-        "failed" => &*RE_FAILED,
-        "skipped" => &*RE_SKIPPED,
-        "ignored" => &*RE_IGNORED,
-        _ => return None,
-    };
+    let re = Regex::new(&format!(r"(\d+)\s*{}", after)).ok()?;
     re.captures(text)
         .and_then(|c| c.get(1))
         .and_then(|m| m.as_str().parse().ok())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    // H-1: extract_number must use pre-compiled regexes (no Regex::new inside function)
-    #[test]
-    fn test_extract_number_passed() {
-        assert_eq!(extract_number("42 passed, 0 failed", "passed"), Some(42));
-    }
-
-    #[test]
-    fn test_extract_number_failed() {
-        assert_eq!(extract_number("3 failed, 10 passed", "failed"), Some(3));
-    }
-
-    #[test]
-    fn test_extract_number_skipped() {
-        assert_eq!(extract_number("5 skipped", "skipped"), Some(5));
-    }
-
-    #[test]
-    fn test_extract_number_ignored() {
-        assert_eq!(extract_number("2 ignored", "ignored"), Some(2));
-    }
-
-    #[test]
-    fn test_extract_number_unknown_returns_none() {
-        // Unknown keyword — must not panic, must return None
-        assert_eq!(extract_number("10 tests", "tests"), None);
-    }
-
-    #[test]
-    fn test_extract_number_no_match() {
-        assert_eq!(extract_number("no results here", "passed"), None);
-    }
 }

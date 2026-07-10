@@ -1,19 +1,20 @@
-//! Filters environment variables, hiding secrets and noise.
+//! Filters environment variables, compacting noise.
 
+use crate::core::guard::never_worse;
 use crate::core::tracking;
+use crate::core::truncate::{CAP_LIST, CAP_WARNINGS};
 use anyhow::Result;
-use std::collections::HashSet;
 use std::env;
+use std::fmt::Write;
 
-/// Show filtered environment variables (hide sensitive data)
-pub fn run(filter: Option<&str>, show_all: bool, verbose: u8) -> Result<()> {
+/// Show filtered environment variables
+pub fn run(filter: Option<&str>, verbose: u8) -> Result<()> {
     let timer = tracking::TimedExecution::start();
 
     if verbose > 0 {
         eprintln!("Environment variables:");
     }
 
-    let sensitive_patterns = get_sensitive_patterns();
     let mut vars: Vec<(String, String)> = env::vars().collect();
     vars.sort_by(|a, b| a.0.cmp(&b.0));
 
@@ -32,14 +33,7 @@ pub fn run(filter: Option<&str>, show_all: bool, verbose: u8) -> Result<()> {
             }
         }
 
-        // Check if sensitive
-        let is_sensitive = sensitive_patterns
-            .iter()
-            .any(|p| key.to_lowercase().contains(p));
-
-        let display_value = if is_sensitive && !show_all {
-            mask_value(value)
-        } else if value.len() > 100 {
+        let display_value = if value.len() > 100 {
             let preview: String = value.chars().take(50).collect();
             format!("{}... ({} chars)", preview, value.chars().count())
         } else {
@@ -62,54 +56,56 @@ pub fn run(filter: Option<&str>, show_all: bool, verbose: u8) -> Result<()> {
         }
     }
 
-    // Print categorized
+    let mut body = String::new();
     if !path_vars.is_empty() {
-        println!("PATH Variables:");
+        let _ = writeln!(body, "PATH Variables:");
         for (k, v) in &path_vars {
             if k == "PATH" {
                 // Split PATH for readability
                 let paths: Vec<&str> = v.split(':').collect();
-                println!("  PATH ({} entries):", paths.len());
-                for p in paths.iter().take(5) {
-                    println!("    {}", p);
+                let _ = writeln!(body, "  PATH ({} entries):", paths.len());
+                const MAX_PATH_ENTRIES: usize = CAP_WARNINGS;
+                for p in paths.iter().take(MAX_PATH_ENTRIES) {
+                    let _ = writeln!(body, "    {}", p);
                 }
-                if paths.len() > 5 {
-                    println!("    ... +{} more", paths.len() - 5);
+                if paths.len() > MAX_PATH_ENTRIES {
+                    let _ = writeln!(body, "    ... +{} more", paths.len() - MAX_PATH_ENTRIES);
                 }
             } else {
-                println!("  {}={}", k, v);
+                let _ = writeln!(body, "  {}={}", k, v);
             }
         }
     }
 
     if !lang_vars.is_empty() {
-        println!("\nLanguage/Runtime:");
+        let _ = writeln!(body, "\nLanguage/Runtime:");
         for (k, v) in &lang_vars {
-            println!("  {}={}", k, v);
+            let _ = writeln!(body, "  {}={}", k, v);
         }
     }
 
     if !cloud_vars.is_empty() {
-        println!("\nCloud/Services:");
+        let _ = writeln!(body, "\nCloud/Services:");
         for (k, v) in &cloud_vars {
-            println!("  {}={}", k, v);
+            let _ = writeln!(body, "  {}={}", k, v);
         }
     }
 
     if !tool_vars.is_empty() {
-        println!("\nTools:");
+        let _ = writeln!(body, "\nTools:");
         for (k, v) in &tool_vars {
-            println!("  {}={}", k, v);
+            let _ = writeln!(body, "  {}={}", k, v);
         }
     }
 
     if !other_vars.is_empty() {
-        println!("\nOther:");
-        for (k, v) in other_vars.iter().take(20) {
-            println!("  {}={}", k, v);
+        const MAX_OTHER_VARS: usize = CAP_LIST;
+        let _ = writeln!(body, "\nOther:");
+        for (k, v) in other_vars.iter().take(MAX_OTHER_VARS) {
+            let _ = writeln!(body, "  {}={}", k, v);
         }
-        if other_vars.len() > 20 {
-            println!("  ... +{} more", other_vars.len() - 20);
+        if other_vars.len() > MAX_OTHER_VARS {
+            let _ = writeln!(body, "  ... +{} more", other_vars.len() - MAX_OTHER_VARS);
         }
     }
 
@@ -120,40 +116,17 @@ pub fn run(filter: Option<&str>, show_all: bool, verbose: u8) -> Result<()> {
         + tool_vars.len()
         + other_vars.len().min(20);
     if filter.is_none() {
-        println!("\nTotal: {} vars (showing {} relevant)", total, shown);
+        let _ = writeln!(body, "\nTotal: {} vars (showing {} relevant)", total, shown);
     }
 
-    let raw: String = vars.iter().map(|(k, v)| format!("{}={}\n", k, v)).collect();
-    let rtk = format!("{} vars -> {} shown", total, shown);
-    timer.track("env", "rtk env", &raw, &rtk);
+    let raw: String = vars.iter().fold(String::new(), |mut output, (k, v)| {
+        let _ = writeln!(output, "{}={}", k, v);
+        output
+    });
+    let shown_body = never_worse(&raw, &body);
+    print!("{}", shown_body);
+    timer.track("env", "rtk env", &raw, shown_body);
     Ok(())
-}
-
-fn get_sensitive_patterns() -> HashSet<&'static str> {
-    let mut set = HashSet::new();
-    set.insert("key");
-    set.insert("secret");
-    set.insert("password");
-    set.insert("token");
-    set.insert("credential");
-    set.insert("auth");
-    set.insert("private");
-    set.insert("api_key");
-    set.insert("apikey");
-    set.insert("access_key");
-    set.insert("jwt");
-    set
-}
-
-fn mask_value(value: &str) -> String {
-    let chars: Vec<char> = value.chars().collect();
-    if chars.len() <= 4 {
-        "****".to_string()
-    } else {
-        let prefix: String = chars[..2].iter().collect();
-        let suffix: String = chars[chars.len() - 2..].iter().collect();
-        format!("{}****{}", prefix, suffix)
-    }
 }
 
 fn is_lang_var(key: &str) -> bool {
@@ -203,4 +176,61 @@ fn is_tool_var(key: &str) -> bool {
 fn is_interesting_var(key: &str) -> bool {
     let patterns = ["HOME", "USER", "LANG", "LC_", "TZ", "PWD", "OLDPWD"];
     patterns.iter().any(|p| key.to_uppercase().starts_with(p))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_lang_var_rust() {
+        assert!(is_lang_var("RUST_LOG"));
+        assert!(is_lang_var("CARGO_HOME"));
+        assert!(is_lang_var("GOPATH"));
+        assert!(is_lang_var("NODE_ENV"));
+    }
+
+    #[test]
+    fn test_is_lang_var_negative() {
+        assert!(!is_lang_var("HOME"));
+        assert!(!is_lang_var("PATH"));
+        assert!(!is_lang_var("USER"));
+    }
+
+    #[test]
+    fn test_is_cloud_var() {
+        assert!(is_cloud_var("AWS_ACCESS_KEY_ID"));
+        assert!(is_cloud_var("AZURE_CLIENT_ID"));
+        assert!(is_cloud_var("DOCKER_HOST"));
+        assert!(is_cloud_var("KUBERNETES_SERVICE_HOST"));
+    }
+
+    #[test]
+    fn test_is_cloud_var_negative() {
+        assert!(!is_cloud_var("HOME"));
+        assert!(!is_cloud_var("RUST_LOG"));
+    }
+
+    #[test]
+    fn test_is_tool_var() {
+        assert!(is_tool_var("EDITOR"));
+        assert!(is_tool_var("GIT_AUTHOR_NAME"));
+        assert!(is_tool_var("SSH_AUTH_SOCK"));
+        assert!(is_tool_var("CLAUDE_API_KEY"));
+    }
+
+    #[test]
+    fn test_is_interesting_var() {
+        assert!(is_interesting_var("HOME"));
+        assert!(is_interesting_var("USER"));
+        assert!(is_interesting_var("LANG"));
+        assert!(is_interesting_var("TZ"));
+        assert!(is_interesting_var("PWD"));
+    }
+
+    #[test]
+    fn test_is_interesting_var_negative() {
+        assert!(!is_interesting_var("RANDOM_VAR"));
+        assert!(!is_interesting_var("MY_CUSTOM_VAR"));
+    }
 }

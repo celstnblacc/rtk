@@ -1,10 +1,11 @@
 [package]
 name = "rtk"
-version = "0.34.7"
+version = "0.43.0"
 edition = "2021"
+rust-version = "1.91"
 authors = ["Patrick Szymkowiak"]
 description = "Rust Token Killer - High-performance CLI proxy to minimize LLM token consumption"
-license = "MIT"
+license = "Apache 2.0"
 homepage = "https://www.rtk-ai.app"
 repository = "https://github.com/rtk-ai/rtk"
 readme = "README.md"
@@ -25,13 +26,17 @@ dirs = "5"
 rusqlite = { version = "0.31", features = ["bundled"] }
 toml = "0.8"
 chrono = "0.4"
-thiserror = "1.0"
 tempfile = "3"
 sha2 = "0.10"
+ureq = "2"
+getrandom = "0.4"
 flate2 = "1.0"
 quick-xml = "0.37"
 which = "8"
-shell-words = "1"
+automod = "1"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 
 [build-dependencies]
 toml = "0.8"
@@ -56,9 +61,12 @@ priority = "optional"
 assets = [
     ["target/release/rtk", "usr/bin/", "755"],
 ]
-
 # cargo-generate-rpm configuration
 [package.metadata.generate-rpm]
 assets = [
     { source = "target/release/rtk", dest = "/usr/bin/rtk", mode = "755" },
 ]
+
+[lints.rust]
+unsafe_code = "deny"
+warnings = "deny"

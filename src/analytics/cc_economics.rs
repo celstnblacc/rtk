@@ -14,9 +14,6 @@ use crate::core::utils::{format_cpt, format_tokens, format_usd};
 
 // ── Constants ──
 
-#[allow(dead_code)]
-const BILLION: f64 = 1e9;
-
 // API pricing ratios (verified Feb 2026, consistent across Claude models <=200K context)
 // Source: https://docs.anthropic.com/en/docs/about-claude/models
 const WEIGHT_OUTPUT: f64 = 5.0; // Output = 5x input
@@ -387,14 +384,12 @@ fn compute_totals(periods: &[PeriodEconomics]) -> Totals {
 
     // Compute global dual metrics (legacy)
     if totals.cc_total_tokens > 0 {
-        let blended_cpt = totals.cc_cost / totals.cc_total_tokens as f64;
-        totals.blended_cpt = Some(blended_cpt);
-        totals.savings_blended = Some(totals.rtk_saved_tokens as f64 * blended_cpt);
+        totals.blended_cpt = Some(totals.cc_cost / totals.cc_total_tokens as f64);
+        totals.savings_blended = Some(totals.rtk_saved_tokens as f64 * totals.blended_cpt.unwrap());
     }
     if totals.cc_active_tokens > 0 {
-        let active_cpt = totals.cc_cost / totals.cc_active_tokens as f64;
-        totals.active_cpt = Some(active_cpt);
-        totals.savings_active = Some(totals.rtk_saved_tokens as f64 * active_cpt);
+        totals.active_cpt = Some(totals.cc_cost / totals.cc_active_tokens as f64);
+        totals.savings_active = Some(totals.rtk_saved_tokens as f64 * totals.active_cpt.unwrap());
     }
 
     totals
