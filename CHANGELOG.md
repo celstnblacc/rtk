@@ -869,3 +869,28 @@ per host you want logged. Reversible via `keylogger-mcp unwrap`. Aligns with til
 - feat(doctor): add `rtk doctor` health check command (hook, DB, PATH, config, failure rate; --json output for token-diet integration)
 - chore: add .superharness/.gitignore, GEMINI.md; propagate Strict Installation Decoupling rule to AGENTS.md and CLAUDE.md
 - 2026-06-25: chore: remove personal workspace path from tracked files
+
+## [Unreleased] — security/permission-engine-hardening
+
+### Security
+
+- **permissions:** cherry-picked upstream `41a6c6b` (rtk-ai/rtk #886) — `check_command()` now calls `load_permission_rules()` directly with unconditional Deny > Ask > Allow > Default precedence, replacing this fork's own weaker port which fell back to `Allow` whenever no allow list was configured at all. Removed the now-dead `load_allow_rules()` bolt-on.
+- **hook_cmd (VS Code):** fixed `handle_vscode()` hardcoding `"permissionDecision": "allow"` regardless of the computed verdict — every rewritten command was auto-allowed for the VS Code Copilot hook path, ignoring Deny/Ask entirely. Now uses the computed `decision`.
+- Cherry-pick of upstream `41a6c6b` only (compound-command allow-escalation fix `40c9dbc`, never-auto-allow decomposition `952245d`, and redirect-bypass fix `e16aa26` tracked separately — see token-diet issue artificemachine/token-diet#5).
+
+### Security (cont'd — `40c9dbc`)
+
+- **permissions:** cherry-picked upstream `40c9dbc` (rtk-ai/rtk #1213) — compound commands (`&&`, `||`, `|`, `;`) now require **every** segment to independently match an allow rule before the chain gets `Allow`. Closes a live bypass where `git status && rm -rf ~` could slip an unapproved second command past the gate because only the first segment needed to match.
+
+### Security (cont'd — `952245d`)
+
+- **lexer:** added `src/discover/lexer.rs` (new module, ported from upstream at `952245d`) — tokenizer + `contains_unattestable_construct()` detects command/process substitution and file-target redirects (fd-dup like `2>&1` and `/dev/null` exempt) that RTK cannot safely decompose; these now defer to the host's own permission engine instead of being auto-allowed. `split_compound_command()` in `permissions.rs` now delegates to `lexer::split_for_permissions`, which additionally decomposes on newline, background `&`, and subshell `( )` — previously only `&&`/`||`/`;`/`|` were checked, so a hidden segment after a newline was invisible to the permission gate.
+- **hook_cmd:** VS Code, Copilot CLI-deny-path, and Gemini hooks now route through a single `decide_hook_action()` decision flow (`HookDecision::{Deny,Defer,AllowRewrite,AskRewrite}`) instead of duplicated ad hoc logic per host. Gemini hook now defers to `ask_user` instead of hardcoded `allow`, and gained the same deny-check the VS Code path already had.
+- **hook_cmd:** added best-effort local audit log (`~/.local/share/rtk/hook-audit.log`, opt-in via `RTK_HOOK_AUDIT=1`) with pipe/newline field sanitization to prevent log-line injection.
+- **permissions:** `find_project_root()`'s git fallback now sets `.stdin(Stdio::null())` on the subprocess — closes a gap in the fork's own "#897: stdin null on all subprocess calls" hardening pass that this call site had missed.
+- Scoped port: skipped upstream's `run_claude`/`run_cursor` native hook entry points, `process_claude_payload`, and the Copilot CLI `modifiedArgs`-preserving restructure — these are new host integrations, not part of this security fix, and `run_claude`/`run_cursor` have no dispatch wiring in this fork's `main.rs` (would be dead code). Also skipped upstream's `super::constants`/`crate::core::stream` module imports (cosmetic-only for this port; used inline literals and a direct `.stdin(Stdio::null())` instead).
+
+### Security (cont'd — `e16aa26`)
+
+- **lexer:** fixed `redirect_has_file_target()` treating *any* `>&` as fd-dup (safe) — `git status >& /tmp/evil` is actually shorthand for `>/tmp/evil 2>&1` (a file write), not a fd duplication, and was being auto-allowed. Now only `>&N`/`>&-` (numeric fd or close) counts as fd-dup; a word after `>&` is treated as an unattestable file-target redirect, same as `>word`.
+- Scoped port: skipped upstream's Cursor/Gemini-specific global-config permission scanning (`load_cursor_rules`, `load_gemini_rules`, `gemini_settings`, `global_config`) — orthogonal to this fix, depends on a `constants` module this fork doesn't have (`CURSOR_DIR`/`GEMINI_DIR`), and this fork's Gemini hook already routes through the same Claude-settings-based `check_command()` as every other host with no regression. All 4 upstream commits (`41a6c6b`, `40c9dbc`, `952245d`, `e16aa26`) from the rtk audit (artificemachine/token-diet#5) are now landed.
