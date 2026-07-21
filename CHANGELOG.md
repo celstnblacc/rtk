@@ -546,6 +546,7 @@ append-only diff check while keeping all pre-sync content intact.
 
 ## [Unreleased]
 
+- 2026-07-21: docs: align CODE_OF_CONDUCT.md with concise 5-line CoC (replaces Contributor Covenant boilerplate with internal style)
 ### Bug Fixes
 
 * **wc:** `wc` filter was never invoked by the hook — removed `"wc "` from `IGNORED_PREFIXES` and added registry entry so `wc` commands are rewritten to `rtk wc`
