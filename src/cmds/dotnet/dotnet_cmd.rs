@@ -618,7 +618,10 @@ fn scan_mtp_kind_in_file(path: &Path) -> MtpProjectKind {
                 );
             }
             Ok(Event::Text(e)) if inside_mtp_element => {
-                if let Ok(text) = e.unescape() {
+                // quick-xml 0.41 replaced the single `unescape()` with
+                // content-model-specific accessors. `.csproj` is XML 1.0, so
+                // xml10_content() is the direct equivalent of the old call.
+                if let Ok(text) = e.xml10_content() {
                     if text.trim().eq_ignore_ascii_case("true") {
                         return MtpProjectKind::VsTestBridge;
                     }
