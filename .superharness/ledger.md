@@ -199,3 +199,5 @@ Append-only activity log. Never edit previous entries.
 - 2026-07-10T11:48:37Z — claude-code — modified: CHANGELOG.md
 - 2026-07-10T11:54:38Z — claude-code — modified: .no-secrets-scan
 - 2026-07-10T11:56:12Z — claude-code — modified: CHANGELOG.md
+- 2026-08-20T10:55:47Z — claude-code — modified: constants.rs
+- 2026-08-20T10:55:55Z — claude-code — modified: toml_filter.rs
