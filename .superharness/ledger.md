@@ -201,3 +201,7 @@ Append-only activity log. Never edit previous entries.
 - 2026-07-10T11:56:12Z — claude-code — modified: CHANGELOG.md
 - 2026-08-20T10:55:47Z — claude-code — modified: constants.rs
 - 2026-08-20T10:55:55Z — claude-code — modified: toml_filter.rs
+- 2026-08-20T12:37:42Z — claude-code — modified: dotnet_trx.rs
+- 2026-08-20T12:38:17Z — claude-code — modified: dotnet_cmd.rs
+- 2026-08-20T12:39:20Z — claude-code — modified: dotnet_trx.rs
+- 2026-08-20T12:40:07Z — claude-code — modified: dotnet_trx.rs

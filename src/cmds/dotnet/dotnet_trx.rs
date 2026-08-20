@@ -3,7 +3,7 @@
 use crate::binlog::{FailedTest, TestSummary};
 use chrono::{DateTime, FixedOffset};
 use quick_xml::events::{BytesStart, Event};
-use quick_xml::Reader;
+use quick_xml::{Reader, XmlVersion};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
@@ -21,7 +21,12 @@ fn extract_attr_value(
             continue;
         }
 
-        if let Ok(value) = attr.decode_and_unescape_value(reader.decoder()) {
+        // quick-xml 0.41 replaced decode_and_unescape_value with a version-aware
+        // variant, because EOL normalization differs between XML 1.0 and 1.1.
+        // TRX files carry an explicit `<?xml version="1.0"?>` declaration.
+        if let Ok(value) =
+            attr.decoded_and_normalized_value(XmlVersion::Explicit1_0, reader.decoder())
+        {
             return Some(value.into_owned());
         }
     }
