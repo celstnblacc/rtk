@@ -185,6 +185,12 @@ pub struct TomlFilterRegistry {
 impl TomlFilterRegistry {
     /// Load registry from disk + built-in. Emits warnings to stderr on parse
     /// errors but never panics — bad files are silently ignored.
+    ///
+    /// Reached via the `REGISTRY` lazy_static below, which `find_matching_filter`
+    /// reads and `main.rs` calls. The `--all-targets` test binary does not link
+    /// that path, so see the note on `FILTERS_TOML` for why the allow is
+    /// `cfg_attr(test, ...)` rather than unconditional.
+    #[cfg_attr(test, allow(dead_code))]
     fn load() -> Self {
         let mut filters = Vec::new();
 
